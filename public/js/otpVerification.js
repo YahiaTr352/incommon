@@ -273,13 +273,38 @@
 document.addEventListener("DOMContentLoaded", async () => {
   let fixedData;
 
-  try {
-    baseURL = "http://localhost:3001"
+  // try {
+  //   baseURL = "http://localhost:3001"
 
-    const res = await axios.get(`${baseURL}/api/clients/payment-data`, {
-      withCredentials: true,
-    });
-    const rawData = res.data;
+  //   const res = await axios.get(`${baseURL}/api/clients/payment-data`, {
+  //     withCredentials: true,
+  //   });
+  //   const rawData = res.data;
+
+  //   fixedData = {
+  //     otp: DOMPurify.sanitize(rawData.otp),
+  //     code: DOMPurify.sanitize(rawData.code),
+  //     merchantMSISDN: DOMPurify.sanitize(rawData.merchantMSISDN),
+  //     transactionID: DOMPurify.sanitize(rawData.transactionID),
+  //   };
+
+  // } catch (error) {
+  //   showToast("Failed to load payment data.");
+  //   console.log(error);
+  //   return;
+  // }
+
+  try {
+        baseURL = "http://localhost:3001"
+  const pathParts = window.location.pathname.split("/");
+  const transactionID = pathParts[pathParts.length - 1];
+
+  const res = await axios.get(`${baseURL}/api/clients/payment-data?transactionID=${transactionID}`, {
+    withCredentials: true,
+  });
+
+  console.log(res);
+  const rawData = res.data;
 
     fixedData = {
       otp: DOMPurify.sanitize(rawData.otp),
@@ -287,12 +312,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       merchantMSISDN: DOMPurify.sanitize(rawData.merchantMSISDN),
       transactionID: DOMPurify.sanitize(rawData.transactionID),
     };
+} catch (error) {
+  showToast("Failed to load payment data.");
+  console.log(error);
+  return;
+}
 
-  } catch (error) {
-    showToast("Failed to load payment data.");
-    console.log(error);
-    return;
-  }
 
   // Helper
   function getCookie(name) {
@@ -304,6 +329,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const token = getCookie("token");
 
   const otp = fixedData.otp;
+  console.log(otp);
   console.log(`OTP is: ${otp}`);
   showToast(`Your verification code is : ${otp}`, "success", 10000);
 

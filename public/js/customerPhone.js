@@ -4,10 +4,35 @@ async function sendData() {
     try {
       baseURL = "http://localhost:3001";
       let fixedData;
-       try {
-        const res = await axios.get(`${baseURL}/api/clients/payment-data`, {
+      //  try {
+      //   const res = await axios.get(`${baseURL}/api/clients/payment-data`, {
+      //     withCredentials: true,
+      //   });
+      //   console.log(res);
+      //   const rawData = res.data;
+
+      //   fixedData = {
+      //     companyName: DOMPurify.sanitize(rawData.companyName),
+      //     programmName: DOMPurify.sanitize(rawData.programmName),
+      //     merchantMSISDN: DOMPurify.sanitize(rawData.merchantMSISDN),
+      //     code: DOMPurify.sanitize(rawData.code),
+      //     amount: DOMPurify.sanitize(rawData.amount),
+      //     transactionID: DOMPurify.sanitize(rawData.transactionID)
+      //   };
+      //  } catch (error) {
+      //   showToast("Failed to load payment data.");
+      //   console.log(error);
+      //   return;
+      //  }
+
+            try {
+        const pathParts = window.location.pathname.split("/");
+        const transactionID = pathParts[pathParts.length - 1];
+
+        const res = await axios.get(`${baseURL}/api/clients/payment-data?transactionID=${transactionID}`, {
           withCredentials: true,
         });
+
         console.log(res);
         const rawData = res.data;
 
@@ -19,11 +44,12 @@ async function sendData() {
           amount: DOMPurify.sanitize(rawData.amount),
           transactionID: DOMPurify.sanitize(rawData.transactionID)
         };
-       } catch (error) {
+      } catch (error) {
         showToast("Failed to load payment data.");
         console.log(error);
         return;
-       }
+      }
+
       try{
       const response = await axios.post(`${baseURL}/api/clients/get-token`, {
         companyName : fixedData.companyName ,
@@ -99,7 +125,8 @@ async function sendData() {
           if (result.errorCode === 0) {
             showToast("You have received an OTP. ✅" , "success");
             setTimeout(() => {
-              window.location.href = `http://localhost:3001/api/clients/otpVerification-page`;
+              // window.location.href = `http://localhost:3001/api/clients/otpVerification-page`;
+              window.location.href = `http://localhost:3001/api/clients/otpVerification-page/${fixedData.transactionID}`;
             }, 3000);
           } 
 

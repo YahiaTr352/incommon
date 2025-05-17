@@ -304,12 +304,21 @@ const paymentRequest = async (req, res) => {
       token,
     });
 
+    // if (response.data.details.otp) {
+    //   req.session.paymentData = {
+    //     ...req.session.paymentData,
+    //     otp: response.data.details.otp
+    //   };
+    // }
+
     if (response.data.details.otp) {
-      req.session.paymentData = {
-        ...req.session.paymentData,
-        otp: response.data.details.otp
-      };
+    req.session.transactions = req.session.transactions || {};
+
+    if (req.session.transactions[transactionID]) {
+      req.session.transactions[transactionID].otp = response.data.details.otp;
     }
+  }
+
 
     return res.status(response.status).json(response.data);
   } catch (error) {
@@ -368,7 +377,42 @@ const resendOTP = async (req, res) => {
 
 // ======== Render Pages ========
 
-const customerPhonePage = (req, res) => {
+// const customerPhonePage = (req, res) => {
+//   const { companyName, programmName, code, merchantMSISDN, amount } = req.body;
+//   const isDevRequest = req.headers["x-dev-request"] === "true";
+
+//   if (!isValidString(companyName)) return isDevRequest ? res.status(400).json({ message: "Invalid CompanyName" }) : res.status(204).end();
+//   if (!isValidString(programmName)) return isDevRequest ? res.status(400).json({ message: "Invalid ProgrammName" }) : res.status(204).end();
+//   if (!isValidNumber(code)) return isDevRequest ? res.status(400).json({ message: "Invalid Code" }) : res.status(204).end();
+//   if (!validateMerchantPhoneNumber(merchantMSISDN)) return isDevRequest ? res.status(400).json({ message: "Invalid Merchant Phone Number" }) : res.status(204).end();
+//   if (!isValidAmount(amount)) return isDevRequest ? res.status(400).json({ message: "Invalid Amount" }) : res.status(204).end();
+
+//   const transactionID = uuidv4();
+
+//   req.session.paymentData = {
+//     companyName,
+//     programmName,
+//     code,
+//     transactionID,
+//     merchantMSISDN,
+//     amount,
+//     otp: null
+//   };
+
+//   res.render("pages/customerPhone/customerPhone");
+// };
+
+// const otpVerificationPage = (req, res) => {
+//   try {
+//     const data = req.session.paymentData;
+//     if (!data) return res.status(400).send("Session expired or invalid");
+//     res.render("pages/otpVerification/otpVerification");
+//   } catch (error) {
+//     return res.status(400).json({ error });
+//   }
+// };
+
+const getUrl = (req, res) => {
   const { companyName, programmName, code, merchantMSISDN, amount } = req.body;
   const isDevRequest = req.headers["x-dev-request"] === "true";
 
@@ -379,8 +423,10 @@ const customerPhonePage = (req, res) => {
   if (!isValidAmount(amount)) return isDevRequest ? res.status(400).json({ message: "Invalid Amount" }) : res.status(204).end();
 
   const transactionID = uuidv4();
-
-  req.session.paymentData = {
+  
+  // خزّن كل العمليات في session
+  req.session.transactions = req.session.transactions || {};
+  req.session.transactions[transactionID] = {
     companyName,
     programmName,
     code,
@@ -390,24 +436,34 @@ const customerPhonePage = (req, res) => {
     otp: null
   };
 
+  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  const redirectUrl = `${baseUrl}/api/clients/customerPhone-page/${transactionID}`;
+
+  res.json({ url: redirectUrl });
+};
+
+const customerPhonePage =  (req, res) => {
+  // const { transactionID } = req.params;
+  // const data = req.session.transactions?.[transactionID];
+
+  // if (!data) return res.status(404).send("Transaction not found");
+
   res.render("pages/customerPhone/customerPhone");
 };
 
 const otpVerificationPage = (req, res) => {
-  try {
-    const data = req.session.paymentData;
-    if (!data) return res.status(400).send("Session expired or invalid");
-    res.render("pages/otpVerification/otpVerification");
-  } catch (error) {
-    return res.status(400).json({ error });
-  }
+
+  res.render("pages/otpVerification/otpVerification");
 };
 
 const getPaymentData = (req, res) => {
-  if (!req.session.paymentData) {
-    return res.status(401).json({ message: "Unauthorized" });
+  const { transactionID } = req.query;
+
+  if (!transactionID || !req.session.transactions?.[transactionID]) {
+    return res.status(401).json({ message: "Unauthorized or invalid transaction" });
   }
-  res.json(req.session.paymentData);
+
+  res.json(req.session.transactions[transactionID]);
 };
 
 // إزالة getBaseURL لأنه يعتمد على Vault
@@ -418,6 +474,7 @@ module.exports = {
   paymentRequest,
   paymentConfirmation,
   resendOTP,
+  getUrl,
   customerPhonePage,
   otpVerificationPage,
   getPaymentData
