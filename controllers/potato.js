@@ -375,9 +375,29 @@ const resendOTP = async (req, res) => {
   }
 };
 
-// ======== Render Pages ========
+const getRedirctUrl = async (req, res) => {
+  try {
+    // const { transactionID } = req.session.paymentData;
+    const { code, companyName, programmName } = req.body;
+    if(!code || !companyName || !programmName) return res.status(400).json({message : "All fields are required."});
+    if (!isValidString(companyName)) return res.status(400).json({ message: "Invalid CompanyName" });
+    if (!isValidString(programmName)) return res.status(400).json({ message: "Invalid ProgrammName" });
+    if (!isValidNumber(code)) return res.status(400).json({ message: "Invalid Code" });
 
-// const customerPhonePage = (req, res) => {
+    const response = await axios.post(`${BASE_API_URL}/api/clients/get-url`, {
+        companyName,
+        programmName,
+        code
+    });
+
+    return res.status(response.status).json(response.data);
+  } catch (error) {
+    if (error.response) return res.status(error.response.status).json(error.response.data);
+    console.error("Error forwarding request:", error.message);
+  }
+};
+
+// const getUrl = (req, res) => {
 //   const { companyName, programmName, code, merchantMSISDN, amount } = req.body;
 //   const isDevRequest = req.headers["x-dev-request"] === "true";
 
@@ -389,7 +409,9 @@ const resendOTP = async (req, res) => {
 
 //   const transactionID = uuidv4();
 
-//   req.session.paymentData = {
+//   // خزّن كل العمليات في session
+//   req.session.transactions = req.session.transactions || {};
+//   req.session.transactions[transactionID] = {
 //     companyName,
 //     programmName,
 //     code,
@@ -399,18 +421,164 @@ const resendOTP = async (req, res) => {
 //     otp: null
 //   };
 
-//   res.render("pages/customerPhone/customerPhone");
+//   const baseUrl = `${req.protocol}://${req.get("host")}`;
+//   const redirectUrl = `${baseUrl}/api/clients/customerPhone-page/${transactionID}`;
+
+//   res.json({ url: redirectUrl });
+// };
+
+
+// const getUrl = (req, res) => {
+//   const { companyName, programmName, code, merchantMSISDN, amount } = req.body;
+//   const isDevRequest = req.headers["x-dev-request"] === "true";
+
+//   if (!isValidString(companyName)) return isDevRequest ? res.status(400).json({ message: "Invalid CompanyName" }) : res.status(204).end();
+//   if (!isValidString(programmName)) return isDevRequest ? res.status(400).json({ message: "Invalid ProgrammName" }) : res.status(204).end();
+//   if (!isValidNumber(code)) return isDevRequest ? res.status(400).json({ message: "Invalid Code" }) : res.status(204).end();
+//   if (!validateMerchantPhoneNumber(merchantMSISDN)) return isDevRequest ? res.status(400).json({ message: "Invalid Merchant Phone Number" }) : res.status(204).end();
+//   if (!isValidAmount(amount)) return isDevRequest ? res.status(400).json({ message: "Invalid Amount" }) : res.status(204).end();
+
+//   // UUIDs
+//   const transactionID = uuidv4();               // داخلي
+//   const publicID_phonePage = uuidv4();          // لصفحة رقم الهاتف
+//   const publicID_otpPage = uuidv4();            // لصفحة OTP
+
+//   // إعداد session maps
+//   req.session.transactions = req.session.transactions || {};
+//   req.session.publicTransactionMap = req.session.publicTransactionMap || {};
+
+//   // خزّن البيانات كاملة
+//   req.session.transactions[transactionID] = {
+//     companyName,
+//     programmName,
+//     code,
+//     transactionID,
+//     merchantMSISDN,
+//     amount,
+//     otp: null
+//   };
+
+//   // اربط كل publicID بـ transactionID
+//   req.session.publicTransactionMap[publicID_phonePage] = transactionID;
+//   req.session.publicTransactionMap[publicID_otpPage] = transactionID;
+
+//   const baseUrl = `${req.protocol}://${req.get("host")}`;
+//   const redirectUrl = `${baseUrl}/api/clients/customerPhone-page/${publicID_phonePage}`;
+
+//   // أرسل كمان الـ publicID الثاني إذا بدك تستخدمه لاحقاً
+//   res.json({ url: redirectUrl, otpPageID: publicID_otpPage });
+// };
+
+// const customerPhonePage = (req, res) => {
+//   const { publicID } = req.params;
+
+//   const transactionID = req.session.publicTransactionMap?.[publicID];
+//   const data = req.session.transactions?.[transactionID];
+
+//   if (!transactionID || !data) return res.status(404).send("Transaction not found");
+
+//   // خزن transactionID مؤقتاً لجلب البيانات
+//   req.session.currentTransactionID = transactionID;
+
+//   res.render("pages/customerPhone/customerPhone", { data });
 // };
 
 // const otpVerificationPage = (req, res) => {
-//   try {
-//     const data = req.session.paymentData;
-//     if (!data) return res.status(400).send("Session expired or invalid");
-//     res.render("pages/otpVerification/otpVerification");
-//   } catch (error) {
-//     return res.status(400).json({ error });
-//   }
+//   const { publicID } = req.params;
+
+//   const transactionID = req.session.publicTransactionMap?.[publicID];
+//   const data = req.session.transactions?.[transactionID];
+
+//   if (!transactionID || !data) return res.status(404).send("Transaction not found or expired");
+
+//   req.session.currentTransactionID = transactionID;
+
+//   res.render("pages/otpVerification/otpVerification", { data });
 // };
+
+// const getPaymentData = (req, res) => {
+//   const publicID = req.headers["x-page-id"]; // هذا ال UUID الفريد يلي بعتو من كل صفحة
+
+//   // تحقق من وجود الـ publicID و الـ session
+//   if (!publicID || !req.session.publicTransactionMap) {
+//     return res.status(401).json({ message: "Missing or invalid page identifier" });
+//   }
+
+//   const transactionID = req.session.publicTransactionMap[publicID];
+
+//   if (!transactionID || !req.session.transactions?.[transactionID]) {
+//     return res.status(401).json({ message: "Unauthorized or invalid transaction" });
+//   }
+
+//   const data = req.session.transactions[transactionID];
+
+//   res.json(data);
+// };
+
+// const getPaymentData = (req, res) => {
+//   const publicID = req.headers["x-page-id"]; // هذا ال UUID الفريد يلي بعتو من كل صفحة
+
+//   // تحقق من وجود الـ publicID و الـ session
+//   if (!publicID || !req.session.publicTransactionMap) {
+//     return res.status(401).json({ message: "Missing or invalid page identifier" });
+//   }
+
+//   const transactionID = req.session.publicTransactionMap[publicID];
+
+//   if (!transactionID || !req.session.transactions?.[transactionID]) {
+//     return res.status(401).json({ message: "Unauthorized or invalid transaction" });
+//   }
+
+//   const data = req.session.transactions[transactionID];
+
+//   res.json(data);
+// };
+
+
+
+// const customerPhonePage =  (req, res) => {
+//   // const { transactionID } = req.params;
+//   // const data = req.session.transactions?.[transactionID];
+
+//   // if (!data) return res.status(404).send("Transaction not found");
+
+//   res.render("pages/customerPhone/customerPhone");
+// };
+
+// const customerPhonePage = (req, res) => {
+//   const { publicID } = req.params;
+
+//   const transactionID = req.session.publicTransactionMap?.[publicID];
+//   const data = req.session.transactions?.[transactionID];
+
+//   if (!transactionID || !data) {
+//     return res.status(404).send("Transaction not found");
+//   }
+
+//   // نخزن الـ transactionID حاليًا للاستخدام ببقية الصفحات
+//   req.session.currentTransactionID = transactionID;
+
+//   res.render("pages/customerPhone/customerPhone", { data });
+// };
+
+// const otpVerificationPage = (req, res) => {
+
+//   res.render("pages/otpVerification/otpVerification");
+// };
+
+// const getPaymentData = (req, res) => {
+//   const { transactionID } = req.query;
+
+//   if (!transactionID || !req.session.transactions?.[transactionID]) {
+//     return res.status(401).json({ message: "Unauthorized or invalid transaction" });
+//   }
+
+//   res.json(req.session.transactions[transactionID]);
+// };
+
+// إزالة getBaseURL لأنه يعتمد على Vault
+// const getBaseURL = ...
+
 
 const getUrl = (req, res) => {
   const { companyName, programmName, code, merchantMSISDN, amount } = req.body;
@@ -423,9 +591,12 @@ const getUrl = (req, res) => {
   if (!isValidAmount(amount)) return isDevRequest ? res.status(400).json({ message: "Invalid Amount" }) : res.status(204).end();
 
   const transactionID = uuidv4();
-  
-  // خزّن كل العمليات في session
+  const publicID_phonePage = uuidv4();
+  const publicID_otpPage = uuidv4();
+
   req.session.transactions = req.session.transactions || {};
+  req.session.publicTransactionMap = req.session.publicTransactionMap || {};
+
   req.session.transactions[transactionID] = {
     companyName,
     programmName,
@@ -436,44 +607,62 @@ const getUrl = (req, res) => {
     otp: null
   };
 
+  req.session.publicTransactionMap[publicID_phonePage] = transactionID;
+  req.session.publicTransactionMap[publicID_otpPage] = transactionID;
+
   const baseUrl = `${req.protocol}://${req.get("host")}`;
-  const redirectUrl = `${baseUrl}/api/clients/customerPhone-page/${transactionID}`;
+  const redirectUrl = `${baseUrl}/api/clients/customerPhone-page/${publicID_phonePage}`;
 
   res.json({ url: redirectUrl });
 };
 
-const customerPhonePage =  (req, res) => {
-  // const { transactionID } = req.params;
-  // const data = req.session.transactions?.[transactionID];
+// عرض صفحة إدخال رقم الهاتف
+const customerPhonePage = (req, res) => {
+  const { publicID } = req.params; 
+  const transactionID = req.session.publicTransactionMap?.[publicID];
+  const data = req.session.transactions?.[transactionID];
 
-  // if (!data) return res.status(404).send("Transaction not found");
+  if (!transactionID || !data) return res.status(404).send("Transaction not found");
 
+  // req.session.currentTransactionID = transactionID;
   res.render("pages/customerPhone/customerPhone");
 };
 
+// عرض صفحة OTP
 const otpVerificationPage = (req, res) => {
+  const { publicID } = req.params;
+  const transactionID = req.session.publicTransactionMap?.[publicID];
+  const data = req.session.transactions?.[transactionID];
 
+  if (!transactionID || !data) return res.status(404).send("Transaction not found");
+
+  // req.session.currentTransactionID = transactionID;
   res.render("pages/otpVerification/otpVerification");
 };
 
+// جلب البيانات للـ Frontend (من publicID)
 const getPaymentData = (req, res) => {
-  const { transactionID } = req.query;
+  const publicID = req.headers["x-page-id"];
+  if (!publicID) return res.status(400).json({ message: "Missing page ID" });
 
-  if (!transactionID || !req.session.transactions?.[transactionID]) {
-    return res.status(401).json({ message: "Unauthorized or invalid transaction" });
-  }
+  const transactionID = req.session.publicTransactionMap?.[publicID];
+  const data = req.session.transactions?.[transactionID];
 
-  res.json(req.session.transactions[transactionID]);
+  if (!transactionID || !data) return res.status(404).json({ message: "Transaction not found" });
+
+  const otpPageID = Object.keys(req.session.publicTransactionMap).find(
+    (key) => req.session.publicTransactionMap[key] === transactionID && key !== publicID
+  );
+
+  res.json({ ...data, otpPageID });
 };
-
-// إزالة getBaseURL لأنه يعتمد على Vault
-// const getBaseURL = ...
 
 module.exports = {
   getToken,
   paymentRequest,
   paymentConfirmation,
   resendOTP,
+  getRedirctUrl,
   getUrl,
   customerPhonePage,
   otpVerificationPage,

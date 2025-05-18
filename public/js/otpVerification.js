@@ -270,8 +270,8 @@
 
 // })();
 
-document.addEventListener("DOMContentLoaded", async () => {
-  let fixedData;
+// document.addEventListener("DOMContentLoaded", async () => {
+//   let fixedData;
 
   // try {
   //   baseURL = "http://localhost:3001"
@@ -294,32 +294,196 @@ document.addEventListener("DOMContentLoaded", async () => {
   //   return;
   // }
 
+//   try {
+//         baseURL = "http://localhost:3001"
+//   const pathParts = window.location.pathname.split("/");
+//   const transactionID = pathParts[pathParts.length - 1];
+
+//   const res = await axios.get(`${baseURL}/api/clients/payment-data?transactionID=${transactionID}`, {
+//     withCredentials: true,
+//   });
+
+//   console.log(res);
+//   const rawData = res.data;
+
+//     fixedData = {
+//       otp: DOMPurify.sanitize(rawData.otp),
+//       code: DOMPurify.sanitize(rawData.code),
+//       merchantMSISDN: DOMPurify.sanitize(rawData.merchantMSISDN),
+//       transactionID: DOMPurify.sanitize(rawData.transactionID),
+//     };
+// } catch (error) {
+//   showToast("Failed to load payment data.");
+//   console.log(error);
+//   return;
+// }
+
+
+//   // Helper
+//   function getCookie(name) {
+//     const cookies = document.cookie.split("; ");
+//     const found = cookies.find(row => row.startsWith(name + "="));
+//     return found ? found.split("=")[1] : null;
+//   }
+
+//   const token = getCookie("token");
+
+//   const otp = fixedData.otp;
+//   console.log(otp);
+//   console.log(`OTP is: ${otp}`);
+//   showToast(`Your verification code is : ${otp}`, "success", 10000);
+
+//   const inputs = document.querySelectorAll(".otp-inputs input");
+//   const resendBtn = document.getElementById("resendBtn");
+//   const form = document.getElementById("otpForm");
+
+//   inputs.forEach((input, index) => {
+//     input.addEventListener("input", () => {
+//       if (input.value.length === 1 && index < inputs.length - 1) {
+//         inputs[index + 1].focus();
+//       }
+//     });
+
+//     input.addEventListener("keydown", (e) => {
+//       if (e.key === "Backspace" && !input.value && index > 0) {
+//         inputs[index - 1].focus();
+//       }
+//     });
+//   });
+
+//   form.addEventListener("submit", async (e) => {
+//     e.preventDefault();
+//     const otpCode = DOMPurify.sanitize(Array.from(inputs).map((input) => input.value).join(""));
+
+//     console.log("Typed OTP:", otpCode);
+//     console.log("Expected OTP:", fixedData.otp);
+
+//     if (otpCode.length !== 6 || !/^\d{6}$/.test(otpCode)) {
+//       showToast("Please enter a valid 6-digit OTP.");
+//       return;
+//     }
+
+//     try {
+//       const response = await axios.post(`${baseURL}/api/clients/payment-confirmation`, {
+//         code: fixedData.code,
+//         merchantMSISDN: fixedData.merchantMSISDN,
+//          transactionID : fixedData.transactionID,
+//         OTP: otpCode,
+//         token
+//       }, {
+//         withCredentials: true
+//       });
+
+//       if (response.data.errorCode === 0) {
+//         showToast("OTP verified successfully! ✅", "success");
+//       }
+//     } catch (error) {
+//       console.log(error.message);
+
+//       if (error.response && [404, 405, 406, 407, 408, 409 , 410 , 411 , 412].includes(error.response.status)) {
+//         const errorMessage = DOMPurify.sanitize(error.response.data.errorDesc);
+//         showToast(errorMessage);
+//       } else {
+//         showToast("Something went wrong, try again later.");
+//         console.log(error.message);
+//         console.log(error);
+//       }
+//     }
+//   });
+
+//   resendBtn.addEventListener("click", async () => {
+//     if (resendBtn.classList.contains("disabled")) return;
+
+//     resendBtn.classList.add("disabled");
+//     let seconds = 60;
+//     resendBtn.textContent = `Resend OTP in ${seconds}s`;
+
+//     const timerInterval = setInterval(() => {
+//       seconds--;
+//       resendBtn.textContent = `Resend OTP in ${seconds}s`;
+//       if (seconds <= 0) {
+//         clearInterval(timerInterval);
+//         resendBtn.classList.remove("disabled");
+//         resendBtn.textContent = "Resend OTP";
+//       }
+//     }, 1000);
+
+//     try {
+//       const response = await axios.post(`${baseURL}/api/clients/resend-otp`, {
+//         code: fixedData.code,
+//         merchantMSISDN: fixedData.merchantMSISDN,
+//         transactionID: fixedData.transactionID,
+//         token
+//       }, {
+//         withCredentials: true
+//       });
+
+//       console.log("Resend OTP response:", response.data);
+
+//       if (response.data.errorCode === 0) {
+//         const newOtp = DOMPurify.sanitize(response.data.otp);
+//         if (newOtp) {
+//           showToast(`Your verification code is : ${newOtp}`, "success", 10000);
+//         } else {
+//           showToast("OTP not returned from server", "error");
+//         }
+//       }
+//     } catch (error) {
+//       if (error.response && [405 , 410].includes(error.response.status)) {
+//         clearInterval(timerInterval);
+//         resendBtn.classList.remove("disabled");
+//         resendBtn.textContent = "Resend OTP";
+//         const errorMessage = DOMPurify.sanitize(error.response.data.errorDesc);
+//         showToast(errorMessage);
+//       } else {
+//       console.log(error);
+//       clearInterval(timerInterval);
+//       resendBtn.classList.remove("disabled");
+//       resendBtn.textContent = "Resend OTP";
+//       showToast("Something went wrong, try again later.");
+//       }
+//     }
+//   });
+// });
+
+window.addEventListener("DOMContentLoaded", async () => {
+  const baseURL = "http://localhost:3001";
+  let fixedData;
+
   try {
-        baseURL = "http://localhost:3001"
-  const pathParts = window.location.pathname.split("/");
-  const transactionID = pathParts[pathParts.length - 1];
+    // ✅ استخراج الـ publicID من الـ URL
+    const pathParts = window.location.pathname.split("/");
+    const publicID = pathParts[pathParts.length - 1];
 
-  const res = await axios.get(`${baseURL}/api/clients/payment-data?transactionID=${transactionID}`, {
-    withCredentials: true,
-  });
+    // ✅ جلب البيانات من السيرفر باستخدام الـ publicID كـ Header
+    const res = await axios.get(`${baseURL}/api/clients/payment-data`, {
+      withCredentials: true,
+      headers: {
+        "x-page-id": publicID
+      }
+    });
 
-  console.log(res);
-  const rawData = res.data;
+    const rawData = res.data;
 
     fixedData = {
+      companyName: DOMPurify.sanitize(rawData.companyName),
+      programmName: DOMPurify.sanitize(rawData.programmName),
       otp: DOMPurify.sanitize(rawData.otp),
       code: DOMPurify.sanitize(rawData.code),
       merchantMSISDN: DOMPurify.sanitize(rawData.merchantMSISDN),
-      transactionID: DOMPurify.sanitize(rawData.transactionID),
+      transactionID: DOMPurify.sanitize(rawData.transactionID)
     };
-} catch (error) {
-  showToast("Failed to load payment data.");
-  console.log(error);
-  return;
-}
+  } catch (error) {
+    showToast("Failed to load payment data.");
+    console.log(error);
+    return;
+  }
 
+  // ✅ عرض OTP في toast للتجريب
+  console.log(`OTP is: ${fixedData.otp}`);
+  showToast(`Your verification code is: ${fixedData.otp}`, "success", 10000);
 
-  // Helper
+  // ✅ قراءة التوكن من الكوكيز
   function getCookie(name) {
     const cookies = document.cookie.split("; ");
     const found = cookies.find(row => row.startsWith(name + "="));
@@ -328,15 +492,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const token = getCookie("token");
 
-  const otp = fixedData.otp;
-  console.log(otp);
-  console.log(`OTP is: ${otp}`);
-  showToast(`Your verification code is : ${otp}`, "success", 10000);
-
   const inputs = document.querySelectorAll(".otp-inputs input");
   const resendBtn = document.getElementById("resendBtn");
   const form = document.getElementById("otpForm");
 
+  // ✅ التنقل بين خانات الإدخال
   inputs.forEach((input, index) => {
     input.addEventListener("input", () => {
       if (input.value.length === 1 && index < inputs.length - 1) {
@@ -351,46 +511,93 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
+  // ✅ التحقق من رمز OTP عند الإرسال
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const otpCode = DOMPurify.sanitize(Array.from(inputs).map((input) => input.value).join(""));
 
-    console.log("Typed OTP:", otpCode);
-    console.log("Expected OTP:", fixedData.otp);
+    const otpCode = DOMPurify.sanitize(Array.from(inputs).map(input => input.value).join(""));
 
     if (otpCode.length !== 6 || !/^\d{6}$/.test(otpCode)) {
       showToast("Please enter a valid 6-digit OTP.");
       return;
     }
 
+    // try {
+    //   const response = await axios.post(`${baseURL}/api/clients/payment-confirmation`, {
+    //     code: fixedData.code,
+    //     merchantMSISDN: fixedData.merchantMSISDN,
+    //     transactionID: fixedData.transactionID,
+    //     OTP: otpCode,
+    //     token
+    //   }, {
+    //     withCredentials: true
+    //   });
+
+    //   if (response.data.errorCode === 0) {
+    //     showToast("OTP verified successfully! ✅", "success");
+    //     // يمكنك التوجيه إلى صفحة نجاح مثلاً
+    //   } else {
+    //     showToast("Verification failed. Please try again.");
+    //   }
+    // } catch (error) {
+    //   console.log(error);
+
+    //   if (error.response && error.response.data?.errorDesc) {
+    //     showToast(DOMPurify.sanitize(error.response.data.errorDesc));
+    //   } else {
+    //     showToast("Something went wrong, try again later.");
+    //   }
+    // }
+
     try {
-      const response = await axios.post(`${baseURL}/api/clients/payment-confirmation`, {
-        code: fixedData.code,
-        merchantMSISDN: fixedData.merchantMSISDN,
-         transactionID : fixedData.transactionID,
-        OTP: otpCode,
-        token
-      }, {
-        withCredentials: true
-      });
-
-      if (response.data.errorCode === 0) {
-        showToast("OTP verified successfully! ✅", "success");
-      }
-    } catch (error) {
-      console.log(error.message);
-
-      if (error.response && [404, 405, 406, 407, 408, 409 , 410 , 411 , 412].includes(error.response.status)) {
-        const errorMessage = DOMPurify.sanitize(error.response.data.errorDesc);
-        showToast(errorMessage);
-      } else {
-        showToast("Something went wrong, try again later.");
-        console.log(error.message);
-        console.log(error);
-      }
-    }
+  const response = await axios.post(`${baseURL}/api/clients/payment-confirmation`, {
+    code: fixedData.code,
+    merchantMSISDN: fixedData.merchantMSISDN,
+    transactionID: fixedData.transactionID,
+    OTP: otpCode,
+    token
+  }, {
+    withCredentials: true
   });
 
+  if (response.data.errorCode === 0) {
+    showToast("OTP verified successfully! ✅", "success");
+
+    // الآن نرسل طلب للحصول على الـ URL من الـ API `getUrl`
+    const urlResponse = await axios.post(`${baseURL}/api/clients/getRedirct-url`, 
+       {
+        companyName: fixedData.companyName,
+        programmName: fixedData.programmName,
+        code: fixedData.code
+      },
+      {
+      withCredentials: true
+      }
+    );
+    console.log(urlResponse);
+
+    if (urlResponse.data.url) {
+      // إذا تم العثور على الـ URL، نقوم بتوجيه المستخدم إلى تلك الصفحة
+      window.location.href = urlResponse.data.url;
+    } else {
+      showToast("URL not found for this transaction.");
+    }
+  } else {
+    showToast("Verification failed. Please try again.");
+  }
+} catch (error) {
+  console.log(error);
+
+  if (error.response && error.response.data?.errorDesc) {
+    showToast(DOMPurify.sanitize(error.response.data.errorDesc));
+  } else {
+    showToast("Something went wrong, try again later.");
+  }
+}
+
+  });
+
+  // ✅ إعادة إرسال OTP
   resendBtn.addEventListener("click", async () => {
     if (resendBtn.classList.contains("disabled")) return;
 
@@ -418,29 +625,21 @@ document.addEventListener("DOMContentLoaded", async () => {
         withCredentials: true
       });
 
-      console.log("Resend OTP response:", response.data);
-
       if (response.data.errorCode === 0) {
         const newOtp = DOMPurify.sanitize(response.data.otp);
-        if (newOtp) {
-          showToast(`Your verification code is : ${newOtp}`, "success", 10000);
-        } else {
-          showToast("OTP not returned from server", "error");
-        }
+        showToast(`Your new verification code is: ${newOtp}`, "success", 10000);
+      } else {
+        showToast("Failed to resend OTP.");
       }
     } catch (error) {
-      if (error.response && [405 , 410].includes(error.response.status)) {
-        clearInterval(timerInterval);
-        resendBtn.classList.remove("disabled");
-        resendBtn.textContent = "Resend OTP";
-        const errorMessage = DOMPurify.sanitize(error.response.data.errorDesc);
-        showToast(errorMessage);
-      } else {
-      console.log(error);
       clearInterval(timerInterval);
       resendBtn.classList.remove("disabled");
       resendBtn.textContent = "Resend OTP";
-      showToast("Something went wrong, try again later.");
+
+      if (error.response?.data?.errorDesc) {
+        showToast(DOMPurify.sanitize(error.response.data.errorDesc));
+      } else {
+        showToast("Something went wrong while resending OTP.");
       }
     }
   });
