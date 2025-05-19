@@ -451,28 +451,76 @@ window.addEventListener("DOMContentLoaded", async () => {
   let fixedData;
 
   try {
-    // ✅ استخراج الـ publicID من الـ URL
-    const pathParts = window.location.pathname.split("/");
-    const publicID = pathParts[pathParts.length - 1];
 
-    // ✅ جلب البيانات من السيرفر باستخدام الـ publicID كـ Header
-    const res = await axios.get(`${baseURL}/api/clients/payment-data`, {
-      withCredentials: true,
-      headers: {
-        "x-page-id": publicID
-      }
+    
+    // // ✅ استخراج الـ publicID من الـ URL
+    // const pathParts = window.location.pathname.split("/");
+    // const publicID = pathParts[pathParts.length - 1];
+
+    // // ✅ جلب البيانات من السيرفر باستخدام الـ publicID كـ Header
+    // const res = await axios.get(`${baseURL}/api/clients/payment-data`, {
+    //   withCredentials: true,
+    //   headers: {
+    //     "x-page-id": publicID
+    //   }
+    // });
+
+    // const rawData = res.data;
+
+    // fixedData = {
+    //   companyName: DOMPurify.sanitize(rawData.companyName),
+    //   programmName: DOMPurify.sanitize(rawData.programmName),
+    //   otp: DOMPurify.sanitize(rawData.otp),
+    //   code: DOMPurify.sanitize(rawData.code),
+    //   merchantMSISDN: DOMPurify.sanitize(rawData.merchantMSISDN),
+    //   transactionID: DOMPurify.sanitize(rawData.transactionID)
+    // };
+
+     // توليد مفتاح RSA للمتصفح
+    rsaKeyPair = await generateRSAKeyPair();
+    const exportedPublicKey = await exportPublicKey(rsaKeyPair.publicKey);
+    const resKey = await axios.post(`${baseURL}/api/clients/exchange-keys`, {
+      clientPublicKey: exportedPublicKey, // ✅ تعديل الاسم
+    }, {
+      withCredentials: true
     });
 
-    const rawData = res.data;
+    serverPublicKey = await importServerPublicKey(resKey.data.serverPublicKey);
 
-    fixedData = {
-      companyName: DOMPurify.sanitize(rawData.companyName),
-      programmName: DOMPurify.sanitize(rawData.programmName),
-      otp: DOMPurify.sanitize(rawData.otp),
-      code: DOMPurify.sanitize(rawData.code),
-      merchantMSISDN: DOMPurify.sanitize(rawData.merchantMSISDN),
-      transactionID: DOMPurify.sanitize(rawData.transactionID)
-    };
+
+        const pathParts = window.location.pathname.split("/");
+    const publicID = pathParts[pathParts.length - 1];
+const payload = { pageID: publicID };
+const encryptedPayload = await encryptHybrid(JSON.stringify(payload), serverPublicKey);
+
+// 2. إرسال الطلب المشفر بـ POST
+const res = await axios.post(`${baseURL}/api/clients/payment-data`, encryptedPayload, {
+  withCredentials: true
+});
+
+
+console.log(res);
+
+// 3. فك تشفير الاستجابة
+const decrypted = await decryptHybrid(res.data, rsaKeyPair.privateKey);
+const rawData = decrypted;
+
+console.log(rawData);
+
+
+// 4. تعقيم البيانات
+fixedData = {
+  companyName: DOMPurify.sanitize(rawData.companyName),
+  programmName: DOMPurify.sanitize(rawData.programmName),
+  merchantMSISDN: DOMPurify.sanitize(rawData.merchantMSISDN),
+  code: DOMPurify.sanitize(rawData.code),
+  amount: DOMPurify.sanitize(rawData.amount),
+  transactionID: DOMPurify.sanitize(rawData.transactionID),
+  otp: DOMPurify.sanitize(rawData.otp),
+};
+otpPageID = DOMPurify.sanitize(rawData.otpPageID);
+
+
   } catch (error) {
     showToast("Failed to load payment data.");
     console.log(error);
@@ -549,42 +597,52 @@ window.addEventListener("DOMContentLoaded", async () => {
     //   }
     // }
 
+        const paymentConfirmationPayload ={
+          code: fixedData.code,
+          merchantMSISDN: fixedData.merchantMSISDN,
+          transactionID: fixedData.transactionID,
+          OTP: otpCode,
+          token
+    };
+
+    const encryptedPaymentConfirmationPayload = await encryptHybrid(JSON.stringify(paymentConfirmationPayload), serverPublicKey);
+
     try {
-  const response = await axios.post(`${baseURL}/api/clients/payment-confirmation`, {
-    code: fixedData.code,
-    merchantMSISDN: fixedData.merchantMSISDN,
-    transactionID: fixedData.transactionID,
-    OTP: otpCode,
-    token
-  }, {
-    withCredentials: true
-  });
+    const confirmRes = await axios.post(`${baseURL}/api/clients/payment-confirmation`, encryptedPaymentConfirmationPayload, {
+      withCredentials: true
+    });
+const decryptedConfirmRes = await decryptHybrid(confirmRes.data, rsaKeyPair.privateKey);
 
-  if (response.data.errorCode === 0) {
-    showToast("OTP verified successfully! ✅", "success");
 
-    // الآن نرسل طلب للحصول على الـ URL من الـ API `getUrl`
-    const urlResponse = await axios.post(`${baseURL}/api/clients/getRedirct-url`, 
-       {
+if (decryptedConfirmRes.errorCode === 0) {
+  showToast("OTP verified successfully! ✅", "success");
+
+  // ثم نرسل getRedirct-url كالمعتاد
+         const redirectUrlPayload ={
         companyName: fixedData.companyName,
         programmName: fixedData.programmName,
         code: fixedData.code
-      },
-      {
-      withCredentials: true
-      }
-    );
-    console.log(urlResponse);
+    };
 
-    if (urlResponse.data.url) {
-      // إذا تم العثور على الـ URL، نقوم بتوجيه المستخدم إلى تلك الصفحة
-      window.location.href = urlResponse.data.url;
-    } else {
-      showToast("URL not found for this transaction.");
-    }
+    const encryptedRedirectUrlPayload = await encryptHybrid(JSON.stringify(redirectUrlPayload), serverPublicKey);
+
+    const urlResponse = await axios.post(`${baseURL}/api/clients/getRedirct-url`, encryptedRedirectUrlPayload, {
+      withCredentials: true
+    });
+
+
+    const decryptedUrlResponse = await decryptHybrid(urlResponse.data, rsaKeyPair.privateKey);
+
+   if (decryptedUrlResponse.url) {
+    window.location.href = decryptedUrlResponse.url;
   } else {
-    showToast("Verification failed. Please try again.");
+    showToast("URL not found for this transaction.");
   }
+
+} else {
+  showToast("Verification failed. Please try again.");
+}
+
 } catch (error) {
   console.log(error);
 
@@ -615,23 +673,31 @@ window.addEventListener("DOMContentLoaded", async () => {
       }
     }, 1000);
 
-    try {
-      const response = await axios.post(`${baseURL}/api/clients/resend-otp`, {
+            const resendOtpPayload ={
         code: fixedData.code,
         merchantMSISDN: fixedData.merchantMSISDN,
         transactionID: fixedData.transactionID,
         token
-      }, {
-        withCredentials: true
-      });
+    };
 
-      if (response.data.errorCode === 0) {
-        const newOtp = DOMPurify.sanitize(response.data.otp);
+    const encryptedresendOtpPayload = await encryptHybrid(JSON.stringify(resendOtpPayload), serverPublicKey);
+
+    try {
+    const response = await axios.post(`${baseURL}/api/clients/resend-otp`, encryptedresendOtpPayload, {
+      withCredentials: true
+    });
+
+
+    const decryptedResendOtp = await decryptHybrid(response.data, rsaKeyPair.privateKey);
+
+      if (decryptedResendOtp.errorCode === 0) {
+        const newOtp = DOMPurify.sanitize(decryptedResendOtp.otp);
         showToast(`Your new verification code is: ${newOtp}`, "success", 10000);
       } else {
         showToast("Failed to resend OTP.");
       }
     } catch (error) {
+      console.log(error);
       clearInterval(timerInterval);
       resendBtn.classList.remove("disabled");
       resendBtn.textContent = "Resend OTP";

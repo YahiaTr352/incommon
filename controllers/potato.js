@@ -249,6 +249,8 @@
 
 const { v4: uuidv4 } = require("uuid");
 const axios = require("axios");
+const crypto = require('crypto');
+const { generateKeyPairSync } = require('crypto');
 const {
   isValidString,
   isValidNumber,
@@ -258,18 +260,130 @@ const {
   isValidOTP
 } = require("../utils/validation");
 
+const {
+  generateRSAKeyPair,
+  encryptHybrid,
+  decryptHybrid
+} = require('../utils/encryption');
+
+const { publicKey, privateKey } = generateRSAKeyPair();
+
 BASE_API_URL = "http://localhost:5000"
 // ======== API Handlers ========
 
+// const getToken = async (req, res) => {
+//   try {
+//     const { companyName, programmName, merchantMSISDN, code } = req.body;
+
+//     if (!isValidString(companyName)) return res.status(400).json({ message: "Invalid CompanyName" });
+//     if (!isValidString(programmName)) return res.status(400).json({ message: "Invalid ProgrammName" });
+//     if (!validateMerchantPhoneNumber(merchantMSISDN)) return res.status(400).json({ message: "Invalid Merchant Phone Number" });
+//     if (!isValidNumber(code)) return res.status(400).json({ message: "Invalid Code" });
+
+//     const response = await axios.post(`${BASE_API_URL}/api/clients/get-token`, {
+//       programmName,
+//       companyName,
+//       merchantMSISDN,
+//       code,
+//     });
+
+//     return res.status(response.status).json(response.data);
+//   } catch (error) {
+//     if (error.response) return res.status(error.response.status).json(error.response.data);
+//     console.error("Error forwarding request:", error);
+//   }
+// };
+
+
+// const getToken = async (req, res) => {
+//   try {
+//     const encryptedBody = req.body;
+
+//     const serverPrivateKey = req.session?.serverPrivateKey;
+//     const clientPublicKey = req.session?.clientPublicKey;
+
+//     if (!serverPrivateKey || !clientPublicKey) {
+//       return res.status(401).json({ message: 'Missing encryption keys in session' });
+//     }
+
+//     // 1️⃣ فك تشفير البيانات القادمة
+//     let decryptedData;
+//     try {
+//       decryptedData = JSON.parse(decryptHybrid(encryptedBody, serverPrivateKey));
+//     } catch (e) {
+//       console.error("Decryption failed:", e);
+//       return res.status(400).json({ message: 'Invalid encrypted payload' });
+//     }
+
+//     const { companyName, programmName, merchantMSISDN, code } = decryptedData;
+
+//     // 2️⃣ تحقق من صحة البيانات
+//     if (!isValidString(companyName)) return sendEncryptedError(res, clientPublicKey, "Invalid CompanyName");
+//     if (!isValidString(programmName)) return sendEncryptedError(res, clientPublicKey, "Invalid ProgrammName");
+//     if (!validateMerchantPhoneNumber(merchantMSISDN)) return sendEncryptedError(res, clientPublicKey, "Invalid Merchant Phone Number");
+//     if (!isValidNumber(code)) return sendEncryptedError(res, clientPublicKey, "Invalid Code");
+
+//     // 3️⃣ إرسال الطلب الأصلي
+//     const response = await axios.post(`${BASE_API_URL}/api/clients/get-token`, {
+//       programmName,
+//       companyName,
+//       merchantMSISDN,
+//       code,
+//     });
+
+//     // 4️⃣ تشفير الاستجابة
+//     const encryptedResponse = encryptHybrid(JSON.stringify(response.data), clientPublicKey);
+//     return res.status(200).json(encryptedResponse);
+
+//   } catch (error) {
+//     console.error("Error in getToken:", error);
+
+//     const clientPublicKey = req.session?.clientPublicKey;
+
+//     if (error.response && clientPublicKey) {
+//       const encryptedError = encryptHybrid(JSON.stringify(error.response.data), clientPublicKey);
+//       return res.status(error.response.status).json(encryptedError);
+//     }
+
+//     return res.status(500).json({ message: 'Internal Server Error' });
+//   }
+// };
+
+
+const sendEncryptedError = (res, clientPublicKey, message, status = 400) => {
+  const encrypted = encryptHybrid(JSON.stringify({ message }), clientPublicKey);
+  return res.status(status).json(encrypted);
+};
+
 const getToken = async (req, res) => {
+  const serverPrivateKey = req.session?.serverPrivateKey;
+  const clientPublicKey = req.session?.clientPublicKey;
+
+  if (!serverPrivateKey || !clientPublicKey) {
+    return res.status(401).json({ message: 'Missing encryption keys in session' });
+  }
+
+  const encryptedBody = req.body;
+
+  // 1️⃣ فك التشفير
+  let decryptedData;
   try {
-    const { companyName, programmName, merchantMSISDN, code } = req.body;
+    decryptedData = JSON.parse(decryptHybrid(encryptedBody, serverPrivateKey));
+  } catch (e) {
+    console.error("Decryption failed:", e);
+    return sendEncryptedError(res, clientPublicKey, "Invalid encrypted payload", 400);
+  }
 
-    if (!isValidString(companyName)) return res.status(400).json({ message: "Invalid CompanyName" });
-    if (!isValidString(programmName)) return res.status(400).json({ message: "Invalid ProgrammName" });
-    if (!validateMerchantPhoneNumber(merchantMSISDN)) return res.status(400).json({ message: "Invalid Merchant Phone Number" });
-    if (!isValidNumber(code)) return res.status(400).json({ message: "Invalid Code" });
+  const { companyName, programmName, merchantMSISDN, code } = decryptedData;
 
+  // 2️⃣ التحقق من البيانات
+  if (!isValidString(companyName)) return sendEncryptedError(res, clientPublicKey, "Invalid CompanyName");
+  if (!isValidString(programmName)) return sendEncryptedError(res, clientPublicKey, "Invalid ProgrammName");
+  if (!validateMerchantPhoneNumber(merchantMSISDN)) return sendEncryptedError(res, clientPublicKey, "Invalid Merchant Phone Number");
+  if (!isValidNumber(code)) return sendEncryptedError(res, clientPublicKey, "Invalid Code");
+
+  try {
+    // 3️⃣ إرسال الطلب الأصلي
     const response = await axios.post(`${BASE_API_URL}/api/clients/get-token`, {
       programmName,
       companyName,
@@ -277,23 +391,84 @@ const getToken = async (req, res) => {
       code,
     });
 
-    return res.status(response.status).json(response.data);
+    // 4️⃣ تشفير الرد
+    const encryptedResponse = encryptHybrid(JSON.stringify(response.data), clientPublicKey);
+    return res.status(200).json(encryptedResponse);
+
   } catch (error) {
-    if (error.response) return res.status(error.response.status).json(error.response.data);
-    console.error("Error forwarding request:", error);
+    console.error("Error in getToken:", error);
+
+    if (error.response && clientPublicKey) {
+      const encryptedError = encryptHybrid(JSON.stringify(error.response.data), clientPublicKey);
+      return res.status(error.response.status).json(encryptedError);
+    }
+
+    return res.status(500).json({ message: 'Internal Server Error' });
   }
 };
 
+
+// const paymentRequest = async (req, res) => {
+//   try {
+//     // const { transactionID } = req.session.paymentData;
+//     const { code, customerMSISDN, merchantMSISDN, amount, token , transactionID } = req.body;
+
+//     // if (!transactionID) return res.status(400).json({ message: "Session expired or missing transaction ID" });
+//     if (!isValidNumber(code)) return res.status(400).json({ message: "Invalid Code" });
+//     if (!validateMerchantPhoneNumber(merchantMSISDN)) return res.status(400).json({ message: "Invalid Merchant Phone Number" });
+//     if (!validateCustomerPhoneNumber(customerMSISDN)) return res.status(400).json({ message: "Invalid Customer Phone Number" });
+//     if (!isValidAmount(amount)) return res.status(400).json({ message: "Invalid Amount" });
+
+//     const response = await axios.post(`${BASE_API_URL}/api/clients/payment-request`, {
+//       code,
+//       customerMSISDN,
+//       merchantMSISDN,
+//       transactionID,
+//       amount,
+//       token,
+//     });
+
+//     if (response.data.details.otp) {
+//     req.session.transactions = req.session.transactions || {};
+
+//     if (req.session.transactions[transactionID]) {
+//       req.session.transactions[transactionID].otp = response.data.details.otp;
+//     }
+//   }
+
+
+//     return res.status(response.status).json(response.data);
+//   } catch (error) {
+//     if (error.response) return res.status(error.response.status).json(error.response.data);
+//     console.error("Error forwarding request:", error.message);
+//   }
+// };
+
+
 const paymentRequest = async (req, res) => {
   try {
-    // const { transactionID } = req.session.paymentData;
-    const { code, customerMSISDN, merchantMSISDN, amount, token , transactionID } = req.body;
+    const serverPrivateKey = req.session?.serverPrivateKey;
+    const clientPublicKey = req.session?.clientPublicKey;
 
-    // if (!transactionID) return res.status(400).json({ message: "Session expired or missing transaction ID" });
-    if (!isValidNumber(code)) return res.status(400).json({ message: "Invalid Code" });
-    if (!validateMerchantPhoneNumber(merchantMSISDN)) return res.status(400).json({ message: "Invalid Merchant Phone Number" });
-    if (!validateCustomerPhoneNumber(customerMSISDN)) return res.status(400).json({ message: "Invalid Customer Phone Number" });
-    if (!isValidAmount(amount)) return res.status(400).json({ message: "Invalid Amount" });
+    if (!serverPrivateKey || !clientPublicKey) {
+      return res.status(401).json({ message: 'Missing encryption keys' });
+    }
+
+    // 🔓 فك التشفير
+    let decryptedData;
+    try {
+      decryptedData = JSON.parse(decryptHybrid(req.body, serverPrivateKey));
+    } catch (err) {
+      console.error("Failed to decrypt request:", err);
+      return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid encrypted request" }), clientPublicKey));
+    }
+
+    const { code, customerMSISDN, merchantMSISDN, amount, token, transactionID } = decryptedData;
+
+  if (!isValidNumber(code)) return sendEncryptedError(res, clientPublicKey, "Invalid Code");
+  if (!validateMerchantPhoneNumber(merchantMSISDN)) return sendEncryptedError(res, clientPublicKey, "Invalid Merchant Phone Number");
+    if (!validateCustomerPhoneNumber(customerMSISDN)) return sendEncryptedError(res, clientPublicKey, "Invalid Customer Phone Number");
+    if (!isValidAmount(amount)) return sendEncryptedError(res, clientPublicKey, "Invalid amount");
 
     const response = await axios.post(`${BASE_API_URL}/api/clients/payment-request`, {
       code,
@@ -304,39 +479,85 @@ const paymentRequest = async (req, res) => {
       token,
     });
 
-    // if (response.data.details.otp) {
-    //   req.session.paymentData = {
-    //     ...req.session.paymentData,
-    //     otp: response.data.details.otp
-    //   };
-    // }
-
-    if (response.data.details.otp) {
-    req.session.transactions = req.session.transactions || {};
-
-    if (req.session.transactions[transactionID]) {
+    // 🧠 خزّن OTP إن وجد
+    if (response.data.details?.otp && req.session.transactions?.[transactionID]) {
       req.session.transactions[transactionID].otp = response.data.details.otp;
     }
-  }
 
+    console.log(req.session.transactions[transactionID])
 
-    return res.status(response.status).json(response.data);
+    // 🔐 تشفير الرد قبل الإرسال
+    const encryptedResponse = encryptHybrid(JSON.stringify(response.data), clientPublicKey);
+    return res.status(response.status).json(encryptedResponse);
+    
   } catch (error) {
-    if (error.response) return res.status(error.response.status).json(error.response.data);
     console.error("Error forwarding request:", error.message);
+
+    const fallbackError = { message: "Internal Server Error" };
+    const clientPublicKey = req.session?.clientPublicKey;
+    if (error.response && clientPublicKey) {
+      return res.status(error.response.status).json(encryptHybrid(JSON.stringify(error.response.data), clientPublicKey));
+    } else if (clientPublicKey) {
+      return res.status(500).json(encryptHybrid(JSON.stringify(fallbackError), clientPublicKey));
+    } else {
+      return res.status(500).json(fallbackError);
+    }
   }
 };
 
+// const paymentConfirmation = async (req, res) => {
+//   try {
+//     // const { transactionID } = req.session.paymentData;
+//     const { code, merchantMSISDN, OTP, token , transactionID } = req.body;
+
+//     if (!transactionID) return res.status(400).json({ message: "Session expired or missing transaction ID" });
+//     if (!isValidNumber(code)) return res.status(400).json({ message: "Invalid Code" });
+//     if (!validateMerchantPhoneNumber(merchantMSISDN)) return res.status(400).json({ message: "Invalid Merchant Phone Number" });
+//     if (!isValidOTP(OTP)) return res.status(400).json({ message: "Invalid OTP" });
+
+//     const response = await axios.post(`${BASE_API_URL}/api/clients/payment-confirmation`, {
+//       code,
+//       transactionID,
+//       merchantMSISDN,
+//       OTP,
+//       token,
+//     });
+
+//     return res.status(response.status).json(response.data);
+//   } catch (error) {
+//     if (error.response) return res.status(error.response.status).json(error.response.data);
+//     console.error("Error forwarding request:", error.message);
+//   }
+// };
+
 const paymentConfirmation = async (req, res) => {
   try {
-    // const { transactionID } = req.session.paymentData;
-    const { code, merchantMSISDN, OTP, token , transactionID } = req.body;
+    const serverPrivateKey = req.session?.serverPrivateKey;
+    const clientPublicKey = req.session?.clientPublicKey;
 
-    if (!transactionID) return res.status(400).json({ message: "Session expired or missing transaction ID" });
-    if (!isValidNumber(code)) return res.status(400).json({ message: "Invalid Code" });
-    if (!validateMerchantPhoneNumber(merchantMSISDN)) return res.status(400).json({ message: "Invalid Merchant Phone Number" });
-    if (!isValidOTP(OTP)) return res.status(400).json({ message: "Invalid OTP" });
+    if (!serverPrivateKey || !clientPublicKey) {
+      return res.status(401).json({ message: 'Missing encryption keys' });
+    }
 
+    // 🔓 فك التشفير
+    let decryptedData;
+    try {
+      decryptedData = JSON.parse(decryptHybrid(req.body, serverPrivateKey));
+      console.log("🔓 Decrypted payment confirmation data:", decryptedData);
+    } catch (err) {
+      console.error("❌ Failed to decrypt payment confirmation request:", err);
+      return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid encrypted request" }), clientPublicKey));
+    }
+
+    const { code, merchantMSISDN, OTP, token, transactionID } = decryptedData;
+
+    // ✅ التحقق من البيانات
+    if (!transactionID) return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Missing transaction ID" }), clientPublicKey));
+    if (!isValidNumber(code)) return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid Code" }), clientPublicKey));
+    if (!validateMerchantPhoneNumber(merchantMSISDN)) return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid Merchant Phone Number" }), clientPublicKey));
+    if (!isValidOTP(OTP)) return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid OTP" }), clientPublicKey));
+
+    // 📨 إرسال الطلب إلى Syritel
     const response = await axios.post(`${BASE_API_URL}/api/clients/payment-confirmation`, {
       code,
       transactionID,
@@ -345,22 +566,79 @@ const paymentConfirmation = async (req, res) => {
       token,
     });
 
-    return res.status(response.status).json(response.data);
+    // 🔐 تشفير الرد قبل الإرسال
+    const encryptedResponse = encryptHybrid(JSON.stringify(response.data), clientPublicKey);
+    return res.status(response.status).json(encryptedResponse);
+
   } catch (error) {
-    if (error.response) return res.status(error.response.status).json(error.response.data);
-    console.error("Error forwarding request:", error.message);
+    console.error("❌ Error forwarding confirmation request:", error.message);
+
+    const fallbackError = { message: "Internal Server Error" };
+    const clientPublicKey = req.session?.clientPublicKey;
+
+    if (error.response && clientPublicKey) {
+      return res.status(error.response.status).json(encryptHybrid(JSON.stringify(error.response.data), clientPublicKey));
+    } else if (clientPublicKey) {
+      return res.status(500).json(encryptHybrid(JSON.stringify(fallbackError), clientPublicKey));
+    } else {
+      return res.status(500).json(fallbackError);
+    }
   }
 };
 
+// const resendOTP = async (req, res) => {
+//   try {
+//     // const { transactionID } = req.session.paymentData;
+//     const { code, merchantMSISDN, token , transactionID } = req.body;
+
+//     if (!transactionID) return res.status(400).json({ message: "Session expired or missing transaction ID" });
+//     if (!isValidNumber(code)) return res.status(400).json({ message: "Invalid Code" });
+//     if (!validateMerchantPhoneNumber(merchantMSISDN)) return res.status(400).json({ message: "Invalid Merchant Phone Number" });
+
+//     const response = await axios.post(`${BASE_API_URL}/api/clients/resend-otp`, {
+//       code,
+//       transactionID,
+//       merchantMSISDN,
+//       token,
+//     });
+
+//     return res.status(response.status).json(response.data);
+//   } catch (error) {
+//     if (error.response) return res.status(error.response.status).json(error.response.data);
+//     console.error("Error forwarding request:", error.message);
+//   }
+// };
+
 const resendOTP = async (req, res) => {
+  const serverPrivateKey = req.session?.serverPrivateKey;
+  const clientPublicKey = req.session?.clientPublicKey;
+
+  if (!serverPrivateKey || !clientPublicKey) {
+    return res.status(401).json({ message: 'Missing encryption keys in session' });
+  }
+
+  const encryptedBody = req.body;
+
+  // 🔓 1. فك التشفير
+  let decryptedData;
   try {
-    // const { transactionID } = req.session.paymentData;
-    const { code, merchantMSISDN, token , transactionID } = req.body;
+    const decryptedString = decryptHybrid(encryptedBody, serverPrivateKey);
+    console.log("🔓 Decrypted resendOTP data:", decryptedString);
+    decryptedData = JSON.parse(decryptedString);
+  } catch (err) {
+    console.error("❌ Decryption failed in resendOTP:", err);
+    return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid encrypted payload" }), clientPublicKey));
+  }
 
-    if (!transactionID) return res.status(400).json({ message: "Session expired or missing transaction ID" });
-    if (!isValidNumber(code)) return res.status(400).json({ message: "Invalid Code" });
-    if (!validateMerchantPhoneNumber(merchantMSISDN)) return res.status(400).json({ message: "Invalid Merchant Phone Number" });
+  const { code, merchantMSISDN, token, transactionID } = decryptedData;
 
+  // ✅ 2. التحقق من البيانات
+  if (!transactionID) return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Missing transaction ID" }), clientPublicKey));
+  if (!isValidNumber(code)) return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid Code" }), clientPublicKey));
+  if (!validateMerchantPhoneNumber(merchantMSISDN)) return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid Merchant Phone Number" }), clientPublicKey));
+
+  try {
+    // 📡 3. إرسال الطلب إلى Syritel
     const response = await axios.post(`${BASE_API_URL}/api/clients/resend-otp`, {
       code,
       transactionID,
@@ -368,32 +646,102 @@ const resendOTP = async (req, res) => {
       token,
     });
 
-    return res.status(response.status).json(response.data);
+    // 🔐 4. تشفير الرد
+    const encryptedResponse = encryptHybrid(JSON.stringify(response.data), clientPublicKey);
+    return res.status(response.status).json(encryptedResponse);
+
   } catch (error) {
-    if (error.response) return res.status(error.response.status).json(error.response.data);
-    console.error("Error forwarding request:", error.message);
+    console.error("❌ Error in resendOTP:", error.message);
+
+    if (error.response && clientPublicKey) {
+      const encryptedError = encryptHybrid(JSON.stringify(error.response.data), clientPublicKey);
+      return res.status(error.response.status).json(encryptedError);
+    }
+
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
-const getRedirctUrl = async (req, res) => {
-  try {
-    // const { transactionID } = req.session.paymentData;
-    const { code, companyName, programmName } = req.body;
-    if(!code || !companyName || !programmName) return res.status(400).json({message : "All fields are required."});
-    if (!isValidString(companyName)) return res.status(400).json({ message: "Invalid CompanyName" });
-    if (!isValidString(programmName)) return res.status(400).json({ message: "Invalid ProgrammName" });
-    if (!isValidNumber(code)) return res.status(400).json({ message: "Invalid Code" });
+// const getRedirctUrl = async (req, res) => {
+//   try {
+//     // const { transactionID } = req.session.paymentData;
+//     const { code, companyName, programmName } = req.body;
+//     if(!code || !companyName || !programmName) return res.status(400).json({message : "All fields are required."});
+//     if (!isValidString(companyName)) return res.status(400).json({ message: "Invalid CompanyName" });
+//     if (!isValidString(programmName)) return res.status(400).json({ message: "Invalid ProgrammName" });
+//     if (!isValidNumber(code)) return res.status(400).json({ message: "Invalid Code" });
 
+//     const response = await axios.post(`${BASE_API_URL}/api/clients/get-url`, {
+//         companyName,
+//         programmName,
+//         code
+//     });
+
+//     return res.status(response.status).json(response.data);
+//   } catch (error) {
+//     if (error.response) return res.status(error.response.status).json(error.response.data);
+//     console.error("Error forwarding request:", error.message);
+//   }
+// };
+
+const getRedirctUrl = async (req, res) => {
+  const serverPrivateKey = req.session?.serverPrivateKey;
+  const clientPublicKey = req.session?.clientPublicKey;
+
+  if (!serverPrivateKey || !clientPublicKey) {
+    return res.status(401).json({ message: 'Missing encryption keys in session' });
+  }
+
+  const encryptedBody = req.body;
+
+  // 🔓 1. فك التشفير
+  let decryptedData;
+  try {
+    const decryptedString = decryptHybrid(encryptedBody, serverPrivateKey);
+    console.log("🔓 Decrypted getRedirctUrl data:", decryptedString);
+    decryptedData = JSON.parse(decryptedString);
+  } catch (err) {
+    console.error("❌ Decryption failed in getRedirctUrl:", err);
+    return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid encrypted payload" }), clientPublicKey));
+  }
+
+  const { code, companyName, programmName } = decryptedData;
+
+  // ✅ 2. التحقق من البيانات
+  if (!code || !companyName || !programmName) {
+    return res.status(400).json(encryptHybrid(JSON.stringify({ message: "All fields are required." }), clientPublicKey));
+  }
+  if (!isValidString(companyName)) {
+    return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid CompanyName" }), clientPublicKey));
+  }
+  if (!isValidString(programmName)) {
+    return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid ProgrammName" }), clientPublicKey));
+  }
+  if (!isValidNumber(code)) {
+    return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid Code" }), clientPublicKey));
+  }
+
+  try {
+    // 📡 3. إرسال الطلب إلى Syritel
     const response = await axios.post(`${BASE_API_URL}/api/clients/get-url`, {
-        companyName,
-        programmName,
-        code
+      companyName,
+      programmName,
+      code,
     });
 
-    return res.status(response.status).json(response.data);
+    // 🔐 4. تشفير الرد
+    const encryptedResponse = encryptHybrid(JSON.stringify(response.data), clientPublicKey);
+    return res.status(response.status).json(encryptedResponse);
+
   } catch (error) {
-    if (error.response) return res.status(error.response.status).json(error.response.data);
-    console.error("Error forwarding request:", error.message);
+    console.error("❌ Error in getRedirctUrl:", error.message);
+
+    if (error.response && clientPublicKey) {
+      const encryptedError = encryptHybrid(JSON.stringify(error.response.data), clientPublicKey);
+      return res.status(error.response.status).json(encryptedError);
+    }
+
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -594,9 +942,11 @@ const getUrl = (req, res) => {
   const publicID_phonePage = uuidv4();
   const publicID_otpPage = uuidv4();
 
-  req.session.transactions = req.session.transactions || {};
-  req.session.publicTransactionMap = req.session.publicTransactionMap || {};
+  // تأكد من وجود الجلسة المطلوبة
+  req.session.transactions ??= {};
+  req.session.publicTransactionMap ??= {};
 
+  // تخزين تفاصيل المعاملة (بدون تشفير في هذه المرحلة، يمكن التشفير لاحقًا عند الإرسال)
   req.session.transactions[transactionID] = {
     companyName,
     programmName,
@@ -607,14 +957,84 @@ const getUrl = (req, res) => {
     otp: null
   };
 
+  // ربط المعرفات العامة بالمعاملة
   req.session.publicTransactionMap[publicID_phonePage] = transactionID;
   req.session.publicTransactionMap[publicID_otpPage] = transactionID;
 
   const baseUrl = `${req.protocol}://${req.get("host")}`;
   const redirectUrl = `${baseUrl}/api/clients/customerPhone-page/${publicID_phonePage}`;
 
-  res.json({ url: redirectUrl });
+  return res.json({ url: redirectUrl });
 };
+
+
+// const getUrl = (req, res) => {
+//   const serverPrivateKey = req.session?.serverPrivateKey;
+//   const clientPublicKey = req.session?.clientPublicKey;
+
+//   if (!serverPrivateKey || !clientPublicKey) {
+//     return res.status(401).json({ message: 'Missing encryption keys in session' });
+//   }
+
+//   // 1️⃣ فك التشفير
+//   let decrypted;
+//   try {
+//     decrypted = JSON.parse(decryptHybrid(req.body, serverPrivateKey));
+//   } catch (error) {
+//     console.error('Decryption error:', error);
+//     return res.status(400).json({ message: 'Invalid encrypted payload' });
+//   }
+
+//   const { companyName, programmName, code, merchantMSISDN, amount } = decrypted;
+//   const isDevRequest = req.headers["x-dev-request"] === "true";
+
+//   // 2️⃣ التحقق من القيم
+//   if (!isValidString(companyName)) return sendEncryptedError(res, clientPublicKey, "Invalid CompanyName", isDevRequest);
+//   if (!isValidString(programmName)) return sendEncryptedError(res, clientPublicKey, "Invalid ProgrammName", isDevRequest);
+//   if (!isValidNumber(code)) return sendEncryptedError(res, clientPublicKey, "Invalid Code", isDevRequest);
+//   if (!validateMerchantPhoneNumber(merchantMSISDN)) return sendEncryptedError(res, clientPublicKey, "Invalid Merchant Phone Number", isDevRequest);
+//   if (!isValidAmount(amount)) return sendEncryptedError(res, clientPublicKey, "Invalid Amount", isDevRequest);
+
+//   // 3️⃣ إنشاء معرفات المعاملة
+//   const transactionID = uuidv4();
+//   const publicID_phonePage = uuidv4();
+//   const publicID_otpPage = uuidv4();
+
+//   req.session.transactions = req.session.transactions || {};
+//   req.session.publicTransactionMap = req.session.publicTransactionMap || {};
+
+//   req.session.transactions[transactionID] = {
+//     companyName,
+//     programmName,
+//     code,
+//     transactionID,
+//     merchantMSISDN,
+//     amount,
+//     otp: null
+//   };
+
+//   req.session.publicTransactionMap[publicID_phonePage] = transactionID;
+//   req.session.publicTransactionMap[publicID_otpPage] = transactionID;
+
+//   const baseUrl = `${req.protocol}://${req.get("host")}`;
+//   const redirectUrl = `${baseUrl}/api/clients/customerPhone-page/${publicID_phonePage}`;
+
+//   // 4️⃣ تشفير الرد
+//   const encrypted = encryptHybrid(JSON.stringify({ url: redirectUrl }), clientPublicKey);
+//   return res.status(200).json(encrypted);
+// };
+
+// // دالة مساعدة لإرسال الخطأ مشفّر أو status 204 حسب dev
+// function sendEncryptedError(res, clientPublicKey, message, isDevRequest, status = 400) {
+//   if (isDevRequest) {
+//     const encrypted = encryptHybrid(JSON.stringify({ message }), clientPublicKey);
+//     return res.status(status).json(encrypted);
+//   } else {
+//     return res.status(204).end();
+//   }
+// }
+
+
 
 // عرض صفحة إدخال رقم الهاتف
 const customerPhonePage = (req, res) => {
@@ -627,6 +1047,19 @@ const customerPhonePage = (req, res) => {
   // req.session.currentTransactionID = transactionID;
   res.render("pages/customerPhone/customerPhone");
 };
+
+// const customerPhonePage = (req, res) => {
+//   const { publicID } = req.params; 
+//   const transactionID = req.session.publicTransactionMap?.[publicID];
+//   const data = req.session.transactions?.[transactionID];
+
+//   if (!transactionID || !data) return res.status(404).send("Transaction not found");
+
+//   // 🔐 خزّن الـ transactionID الحالي للجلسة (مهم للـ OTP والعمليات القادمة)
+//   req.session.currentTransactionID = transactionID;
+
+//   res.render("pages/customerPhone/customerPhone");
+// };
 
 // عرض صفحة OTP
 const otpVerificationPage = (req, res) => {
@@ -641,21 +1074,191 @@ const otpVerificationPage = (req, res) => {
 };
 
 // جلب البيانات للـ Frontend (من publicID)
+// const getPaymentData = (req, res) => {
+//   const publicID = req.headers["x-page-id"];
+//   if (!publicID) return res.status(400).json({ message: "Missing page ID" });
+
+//   const transactionID = req.session.publicTransactionMap?.[publicID];
+//   const data = req.session.transactions?.[transactionID];
+
+//   if (!transactionID || !data) return res.status(404).json({ message: "Transaction not found" });
+
+//   const otpPageID = Object.keys(req.session.publicTransactionMap).find(
+//     (key) => req.session.publicTransactionMap[key] === transactionID && key !== publicID
+//   );
+
+//   res.json({ ...data, otpPageID });
+// };
+
+// const getPaymentData = (req, res) => {
+//   const serverPrivateKey = req.session?.serverPrivateKey;
+//   const clientPublicKey = req.session?.clientPublicKey;
+
+//   if (!serverPrivateKey || !clientPublicKey) {
+//     return res.status(401).json({ message: "Missing encryption keys in session" });
+//   }
+
+//   const { encryptedKey, iv, ciphertext, authTag } = req.body;
+
+//   if (!encryptedKey || !iv || !ciphertext || !authTag) {
+//     const fallback = encryptHybrid(JSON.stringify({ message: "Missing encrypted fields" }), clientPublicKey);
+//     return res.status(400).json(fallback);
+//   }
+
+//   let decryptedRequest;
+//   try {
+//     decryptedRequest = JSON.parse(decryptHybrid({ encryptedKey, iv, ciphertext, authTag }, serverPrivateKey));
+//   } catch (err) {
+//     console.error("Decryption error:", err);
+//     const fallback = encryptHybrid(JSON.stringify({ message: "Invalid encrypted payload" }), clientPublicKey);
+//     return res.status(400).json(fallback);
+//   }
+
+//   const publicID = decryptedRequest?.pageID;
+//   if (!publicID) {
+//     const encrypted = encryptHybrid(JSON.stringify({ message: "Missing page ID" }), clientPublicKey);
+//     return res.status(400).json(encrypted);
+//   }
+
+//   const transactionID = req.session.publicTransactionMap?.[publicID];
+//   const data = req.session.transactions?.[transactionID];
+
+//   if (!transactionID || !data) {
+//     const encrypted = encryptHybrid(JSON.stringify({ message: "Transaction not found" }), clientPublicKey);
+//     return res.status(404).json(encrypted);
+//   }
+
+//   const otpPageID = Object.keys(req.session.publicTransactionMap).find(
+//     (key) => req.session.publicTransactionMap[key] === transactionID && key !== publicID
+//   );
+
+//   const payload = {
+//     companyName: data.companyName,
+//     programmName: data.programmName,
+//     merchantMSISDN: data.merchantMSISDN,
+//     amount: data.amount,
+//     code: data.code,
+//     transactionID: data.transactionID,
+//     otpPageID
+//   };
+
+//   const encryptedResponse = encryptHybrid(JSON.stringify(payload), clientPublicKey);
+//   return res.status(200).json(encryptedResponse);
+// };
+
 const getPaymentData = (req, res) => {
-  const publicID = req.headers["x-page-id"];
-  if (!publicID) return res.status(400).json({ message: "Missing page ID" });
+  const serverPrivateKey = req.session?.serverPrivateKey;
+  const clientPublicKey = req.session?.clientPublicKey;
+
+  if (!serverPrivateKey || !clientPublicKey) {
+    const encrypted = encryptHybrid(
+      JSON.stringify({ message: "Missing encryption keys in session" }),
+      clientPublicKey
+    );
+    return res.status(401).json(encrypted);
+  }
+
+const { encryptedAESKey, iv, ciphertext, authTag } = req.body;
+
+
+  if (!encryptedAESKey || !iv || !ciphertext || !authTag) {
+    const encrypted = encryptHybrid(
+      JSON.stringify({ message: "Missing encrypted fields" }),
+      clientPublicKey
+    );
+    return res.status(400).json(encrypted);
+  }
+
+  let decryptedRequest;
+  try {
+    decryptedRequest = JSON.parse(
+      decryptHybrid(
+        { encryptedAESKey, iv, ciphertext, authTag },
+        serverPrivateKey
+      )
+    );
+  } catch (err) {
+    console.error("Decryption error:", err);
+    const encrypted = encryptHybrid(
+      JSON.stringify({ message: "Invalid encrypted payload" }),
+      clientPublicKey
+    );
+    return res.status(400).json(encrypted);
+  }
+
+  const publicID = decryptedRequest?.pageID;
+  if (!publicID) {
+    const encrypted = encryptHybrid(
+      JSON.stringify({ message: "Missing page ID" }),
+      clientPublicKey
+    );
+    return res.status(400).json(encrypted);
+  }
 
   const transactionID = req.session.publicTransactionMap?.[publicID];
   const data = req.session.transactions?.[transactionID];
 
-  if (!transactionID || !data) return res.status(404).json({ message: "Transaction not found" });
+  if (!transactionID || !data) {
+    const encrypted = encryptHybrid(
+      JSON.stringify({ message: "Transaction not found" }),
+      clientPublicKey
+    );
+    return res.status(404).json(encrypted);
+  }
 
   const otpPageID = Object.keys(req.session.publicTransactionMap).find(
     (key) => req.session.publicTransactionMap[key] === transactionID && key !== publicID
   );
 
-  res.json({ ...data, otpPageID });
+  const payload = {
+    companyName: data.companyName,
+    programmName: data.programmName,
+    merchantMSISDN: data.merchantMSISDN,
+    amount: data.amount,
+    code: data.code,
+    transactionID: data.transactionID,
+    otp : data.otp,
+    otpPageID
+  };
+
+  const encryptedResponse = encryptHybrid(JSON.stringify(payload), clientPublicKey);
+  return res.status(200).json(encryptedResponse);
 };
+
+
+const exchangeKeys = (req, res) => {
+  const { clientPublicKey } = req.body;
+
+  if (!clientPublicKey) {
+    return res.status(400).json({ message: 'Missing client public key' });
+  }
+
+  try {
+    // ✅ توليد مفتاح RSA للسيرفر
+    const { publicKey, privateKey } = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: {
+        type: 'spki',
+        format: 'pem'
+      },
+      privateKeyEncoding: {
+        type: 'pkcs8',
+        format: 'pem'
+      }
+    });
+
+    // 🔐 تخزين المفاتيح في الجلسة
+    req.session.clientPublicKey = clientPublicKey;
+    req.session.serverPrivateKey = privateKey;
+
+    // 🚀 إرسال المفتاح العام للسيرفر إلى العميل
+    return res.status(200).json({ serverPublicKey: publicKey });
+  } catch (error) {
+    console.error('Key generation error:', error);
+    return res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
 
 module.exports = {
   getToken,
@@ -666,5 +1269,6 @@ module.exports = {
   getUrl,
   customerPhonePage,
   otpVerificationPage,
-  getPaymentData
+  getPaymentData,
+  exchangeKeys
 };

@@ -350,115 +350,249 @@
   // window.onload = sendData;
 
 
-  let fixedData;
-let otpPageID = "";
+//   let fixedData;
+// let otpPageID = "";
+
+// async function sendData() {
+//   const baseURL = "http://localhost:3001";
+
+//   try {
+//     // Extract publicID from the URL
+//     const pathParts = window.location.pathname.split("/");
+//     const publicID = pathParts[pathParts.length - 1];
+
+//     // Fetch transaction data from the server
+//     const res = await axios.get(`${baseURL}/api/clients/payment-data`, {
+//       withCredentials: true,
+//       headers: {
+//         "x-page-id": publicID,
+//       }
+//     });
+
+//     const rawData = res.data;
+
+//     fixedData = {
+//       companyName: DOMPurify.sanitize(rawData.companyName),
+//       programmName: DOMPurify.sanitize(rawData.programmName),
+//       merchantMSISDN: DOMPurify.sanitize(rawData.merchantMSISDN),
+//       code: DOMPurify.sanitize(rawData.code),
+//       amount: DOMPurify.sanitize(rawData.amount),
+//       transactionID: DOMPurify.sanitize(rawData.transactionID)
+//     };
+
+//     otpPageID = DOMPurify.sanitize(rawData.otpPageID);
+
+//     // Request token
+//     const tokenRes = await axios.post(`${baseURL}/api/clients/get-token`, {
+//       companyName: fixedData.companyName,
+//       programmName: fixedData.programmName,
+//       merchantMSISDN: fixedData.merchantMSISDN,
+//       code: fixedData.code
+//     }, {
+//       withCredentials: true
+//     });
+
+//     const token = DOMPurify.sanitize(tokenRes.data.token);
+//     document.cookie = `token=${token}; path=/; SameSite=Lax`;
+
+//   } catch (error) {
+//     console.error("Error loading data:", error);
+//     showToast("Failed to load data or create transaction.");
+//     return;
+//   }
+
+//   // Handle form submission
+//   document.getElementById("paymentForm").addEventListener("submit", async function (event) {
+//     event.preventDefault();
+
+//     const customerMSISDN = DOMPurify.sanitize(document.getElementById("customerMSISDN").value.trim());
+//     const confirmCustomerMSISDN = DOMPurify.sanitize(document.getElementById("confirmCustomerMSISDN").value.trim());
+
+//     if (!customerMSISDN || !confirmCustomerMSISDN) {
+//       showToast("All fields are required.");
+//       return;
+//     }
+
+//     if (customerMSISDN !== confirmCustomerMSISDN) {
+//       showToast("Phone numbers do not match.");
+//       return;
+//     }
+
+//     const phoneRegex = /^0?9\d{8}$/;
+//     if (!phoneRegex.test(customerMSISDN)) {
+//       showToast("Invalid phone number. It must start with 09.");
+//       return;
+//     }
+
+//     const token = document.cookie.split("; ").find(row => row.startsWith("token="))?.split("=")[1];
+
+//     try {
+//       const response = await axios.post(`${baseURL}/api/clients/payment-request`, {
+//         code: fixedData.code,
+//         customerMSISDN,
+//         merchantMSISDN: fixedData.merchantMSISDN,
+//         amount: fixedData.amount,
+//         transactionID: fixedData.transactionID,
+//         token
+//       }, {
+//         withCredentials: true
+//       });
+
+//       const result = response.data;
+
+//       if (result.errorCode === 0) {
+//         showToast("Verification code sent successfully. ✅", "success");
+
+//         setTimeout(() => {
+//           // Redirect to OTP verification page
+//           window.location.href = `${baseURL}/api/clients/otpVerification-page/${otpPageID}`;
+//         }, 3000);
+//       }
+
+//     } catch (err) {
+//       if (err.response?.status === 404) {
+//         const errorMessage = DOMPurify.sanitize(err.response.data.message);
+//         showToast(errorMessage);
+//       } else {
+//         showToast("Something went wrong, please try again later.");
+//       }
+//       console.error(err);
+//     }
+//   });
+// }
+
+// window.onload = sendData;
+
+const baseURL = "http://localhost:3001";
 
 async function sendData() {
-  const baseURL = "http://localhost:3001";
-
   try {
-    // Extract publicID from the URL
-    const pathParts = window.location.pathname.split("/");
-    const publicID = pathParts[pathParts.length - 1];
-
-    // Fetch transaction data from the server
-    const res = await axios.get(`${baseURL}/api/clients/payment-data`, {
-      withCredentials: true,
-      headers: {
-        "x-page-id": publicID,
-      }
-    });
-
-    const rawData = res.data;
-
-    fixedData = {
-      companyName: DOMPurify.sanitize(rawData.companyName),
-      programmName: DOMPurify.sanitize(rawData.programmName),
-      merchantMSISDN: DOMPurify.sanitize(rawData.merchantMSISDN),
-      code: DOMPurify.sanitize(rawData.code),
-      amount: DOMPurify.sanitize(rawData.amount),
-      transactionID: DOMPurify.sanitize(rawData.transactionID)
-    };
-
-    otpPageID = DOMPurify.sanitize(rawData.otpPageID);
-
-    // Request token
-    const tokenRes = await axios.post(`${baseURL}/api/clients/get-token`, {
-      companyName: fixedData.companyName,
-      programmName: fixedData.programmName,
-      merchantMSISDN: fixedData.merchantMSISDN,
-      code: fixedData.code
+    // توليد مفتاح RSA للمتصفح
+    rsaKeyPair = await generateRSAKeyPair();
+    const exportedPublicKey = await exportPublicKey(rsaKeyPair.publicKey);
+    const resKey = await axios.post(`${baseURL}/api/clients/exchange-keys`, {
+      clientPublicKey: exportedPublicKey, // ✅ تعديل الاسم
     }, {
       withCredentials: true
     });
 
-    const token = DOMPurify.sanitize(tokenRes.data.token);
-    document.cookie = `token=${token}; path=/; SameSite=Lax`;
+    serverPublicKey = await importServerPublicKey(resKey.data.serverPublicKey);
 
-  } catch (error) {
-    console.error("Error loading data:", error);
-    showToast("Failed to load data or create transaction.");
-    return;
+
+        const pathParts = window.location.pathname.split("/");
+    const publicID = pathParts[pathParts.length - 1];
+const payload = { pageID: publicID };
+const encryptedPayload = await encryptHybrid(JSON.stringify(payload), serverPublicKey);
+
+// 2. إرسال الطلب المشفر بـ POST
+const res = await axios.post(`${baseURL}/api/clients/payment-data`, encryptedPayload, {
+  withCredentials: true
+});
+
+
+console.log(res);
+
+// 3. فك تشفير الاستجابة
+const decrypted = await decryptHybrid(res.data, rsaKeyPair.privateKey);
+const rawData = decrypted;
+
+console.log(rawData);
+
+
+// 4. تعقيم البيانات
+fixedData = {
+  companyName: DOMPurify.sanitize(rawData.companyName),
+  programmName: DOMPurify.sanitize(rawData.programmName),
+  merchantMSISDN: DOMPurify.sanitize(rawData.merchantMSISDN),
+  code: DOMPurify.sanitize(rawData.code),
+  amount: DOMPurify.sanitize(rawData.amount),
+  transactionID: DOMPurify.sanitize(rawData.transactionID),
+};
+otpPageID = DOMPurify.sanitize(rawData.otpPageID);
+
+    // تشفير البيانات وإرسال طلب token
+    const tokenPayload ={
+      companyName: fixedData.companyName,
+      programmName: fixedData.programmName,
+      merchantMSISDN: fixedData.merchantMSISDN,
+      code: fixedData.code
+    };
+
+    const encryptedTokenPayload = await encryptHybrid(JSON.stringify(tokenPayload), serverPublicKey);
+
+    const tokenRes = await axios.post(`${baseURL}/api/clients/get-token`, encryptedTokenPayload, {
+      withCredentials: true
+    });
+
+    const result = await decryptHybrid(tokenRes.data, rsaKeyPair.privateKey);
+    console.log(result);
+    document.cookie = `token=${result.token}; path=/; SameSite=Lax`;
+
+  } catch (err) {
+    console.error("Error during setup:", err);
+    showToast("Something went wrong during setup.");
   }
 
-  // Handle form submission
-  document.getElementById("paymentForm").addEventListener("submit", async function (event) {
-    event.preventDefault();
+  // معالجة الفورم
+  document.getElementById("paymentForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
 
     const customerMSISDN = DOMPurify.sanitize(document.getElementById("customerMSISDN").value.trim());
     const confirmCustomerMSISDN = DOMPurify.sanitize(document.getElementById("confirmCustomerMSISDN").value.trim());
 
     if (!customerMSISDN || !confirmCustomerMSISDN) {
-      showToast("All fields are required.");
-      return;
+      return showToast("All fields are required.");
     }
 
     if (customerMSISDN !== confirmCustomerMSISDN) {
-      showToast("Phone numbers do not match.");
-      return;
+      return showToast("Phone numbers do not match.");
     }
 
     const phoneRegex = /^0?9\d{8}$/;
     if (!phoneRegex.test(customerMSISDN)) {
-      showToast("Invalid phone number. It must start with 09.");
-      return;
+      return showToast("Invalid phone number. It must start with 09.");
     }
 
     const token = document.cookie.split("; ").find(row => row.startsWith("token="))?.split("=")[1];
 
     try {
-      const response = await axios.post(`${baseURL}/api/clients/payment-request`, {
+      
+
+
+
+
+      const paymentRequestPayload = {
         code: fixedData.code,
         customerMSISDN,
         merchantMSISDN: fixedData.merchantMSISDN,
         amount: fixedData.amount,
         transactionID: fixedData.transactionID,
         token
-      }, {
+      };
+
+      const encryptedpaymentRequestPayload = await encryptHybrid(JSON.stringify(paymentRequestPayload), serverPublicKey);
+
+      const response = await axios.post(`${baseURL}/api/clients/payment-request`, encryptedpaymentRequestPayload, {
         withCredentials: true
       });
 
-      const result = response.data;
+      const result = await decryptHybrid(response.data, rsaKeyPair.privateKey);
 
       if (result.errorCode === 0) {
-        showToast("Verification code sent successfully. ✅", "success");
-
+        showToast("Verification code sent successfully ✅", "success");
         setTimeout(() => {
-          // Redirect to OTP verification page
           window.location.href = `${baseURL}/api/clients/otpVerification-page/${otpPageID}`;
         }, 3000);
-      }
-
-    } catch (err) {
-      if (err.response?.status === 404) {
-        const errorMessage = DOMPurify.sanitize(err.response.data.message);
-        showToast(errorMessage);
       } else {
-        showToast("Something went wrong, please try again later.");
+        showToast(result.message || "Something went wrong.");
       }
+    } catch (err) {
       console.error(err);
+      showToast("Something went wrong during payment request.");
     }
   });
 }
 
 window.onload = sendData;
+
+
