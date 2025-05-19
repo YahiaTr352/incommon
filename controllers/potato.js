@@ -263,10 +263,9 @@ const {
 const {
   generateRSAKeyPair,
   encryptHybrid,
-  decryptHybrid
+  decryptHybrid,
+  sendEncryptedError
 } = require('../utils/encryption');
-
-const { publicKey, privateKey } = generateRSAKeyPair();
 
 BASE_API_URL = "http://localhost:5000"
 // ======== API Handlers ========
@@ -349,12 +348,6 @@ BASE_API_URL = "http://localhost:5000"
 //   }
 // };
 
-
-const sendEncryptedError = (res, clientPublicKey, message, status = 400) => {
-  const encrypted = encryptHybrid(JSON.stringify({ message }), clientPublicKey);
-  return res.status(status).json(encrypted);
-};
-
 const getToken = async (req, res) => {
   const serverPrivateKey = req.session?.serverPrivateKey;
   const clientPublicKey = req.session?.clientPublicKey;
@@ -396,15 +389,22 @@ const getToken = async (req, res) => {
     return res.status(200).json(encryptedResponse);
 
   } catch (error) {
-    console.error("Error in getToken:", error);
+  // console.error("Error in getToken:", error);
 
-    if (error.response && clientPublicKey) {
-      const encryptedError = encryptHybrid(JSON.stringify(error.response.data), clientPublicKey);
-      return res.status(error.response.status).json(encryptedError);
-    }
+  const errMsg =
+    error.response?.data?.message ||
+    error.response?.data?.errorDesc
 
-    return res.status(500).json({ message: 'Internal Server Error' });
+  if (error.response && clientPublicKey) {
+    return sendEncryptedError(res, clientPublicKey, errMsg, error.response.status);
   }
+
+  if (clientPublicKey) {
+    return sendEncryptedError(res, clientPublicKey, "Internal Server Error", 500);
+  }
+
+  return res.status(500).json({ message: 'Internal Server Error' });
+}
 };
 
 
@@ -446,9 +446,9 @@ const getToken = async (req, res) => {
 
 
 const paymentRequest = async (req, res) => {
-  try {
-    const serverPrivateKey = req.session?.serverPrivateKey;
+      const serverPrivateKey = req.session?.serverPrivateKey;
     const clientPublicKey = req.session?.clientPublicKey;
+  try {
 
     if (!serverPrivateKey || !clientPublicKey) {
       return res.status(401).json({ message: 'Missing encryption keys' });
@@ -491,18 +491,22 @@ const paymentRequest = async (req, res) => {
     return res.status(response.status).json(encryptedResponse);
     
   } catch (error) {
-    console.error("Error forwarding request:", error.message);
+  // console.error("Error in getToken:", error);
 
-    const fallbackError = { message: "Internal Server Error" };
-    const clientPublicKey = req.session?.clientPublicKey;
-    if (error.response && clientPublicKey) {
-      return res.status(error.response.status).json(encryptHybrid(JSON.stringify(error.response.data), clientPublicKey));
-    } else if (clientPublicKey) {
-      return res.status(500).json(encryptHybrid(JSON.stringify(fallbackError), clientPublicKey));
-    } else {
-      return res.status(500).json(fallbackError);
-    }
+  const errMsg =
+    error.response?.data?.message ||
+    error.response?.data?.errorDesc
+
+  if (error.response && clientPublicKey) {
+    return sendEncryptedError(res, clientPublicKey, errMsg, error.response.status);
   }
+
+  if (clientPublicKey) {
+    return sendEncryptedError(res, clientPublicKey, "Internal Server Error", 500);
+  }
+
+  return res.status(500).json({ message: 'Internal Server Error' });
+}
 };
 
 // const paymentConfirmation = async (req, res) => {
@@ -531,9 +535,9 @@ const paymentRequest = async (req, res) => {
 // };
 
 const paymentConfirmation = async (req, res) => {
-  try {
-    const serverPrivateKey = req.session?.serverPrivateKey;
+      const serverPrivateKey = req.session?.serverPrivateKey;
     const clientPublicKey = req.session?.clientPublicKey;
+  try {
 
     if (!serverPrivateKey || !clientPublicKey) {
       return res.status(401).json({ message: 'Missing encryption keys' });
@@ -546,16 +550,16 @@ const paymentConfirmation = async (req, res) => {
       console.log("🔓 Decrypted payment confirmation data:", decryptedData);
     } catch (err) {
       console.error("❌ Failed to decrypt payment confirmation request:", err);
-      return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid encrypted request" }), clientPublicKey));
+      return  sendEncryptedError(res, clientPublicKey, "Invalid encrypted request");
     }
 
     const { code, merchantMSISDN, OTP, token, transactionID } = decryptedData;
 
     // ✅ التحقق من البيانات
-    if (!transactionID) return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Missing transaction ID" }), clientPublicKey));
-    if (!isValidNumber(code)) return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid Code" }), clientPublicKey));
-    if (!validateMerchantPhoneNumber(merchantMSISDN)) return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid Merchant Phone Number" }), clientPublicKey));
-    if (!isValidOTP(OTP)) return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid OTP" }), clientPublicKey));
+    if (!transactionID) return sendEncryptedError(res, clientPublicKey, "Missing transaction ID");
+    if (!isValidNumber(code)) return sendEncryptedError(res, clientPublicKey, "Invalid Code");
+    if (!validateMerchantPhoneNumber(merchantMSISDN)) return sendEncryptedError(res, clientPublicKey, "Invalid Merchant Phone Number");
+    if (!isValidOTP(OTP)) return sendEncryptedError(res, clientPublicKey, "Invalid Otp");;
 
     // 📨 إرسال الطلب إلى Syritel
     const response = await axios.post(`${BASE_API_URL}/api/clients/payment-confirmation`, {
@@ -571,19 +575,22 @@ const paymentConfirmation = async (req, res) => {
     return res.status(response.status).json(encryptedResponse);
 
   } catch (error) {
-    console.error("❌ Error forwarding confirmation request:", error.message);
+  // console.error("Error in getToken:", error);
 
-    const fallbackError = { message: "Internal Server Error" };
-    const clientPublicKey = req.session?.clientPublicKey;
+  const errMsg =
+    error.response?.data?.message ||
+    error.response?.data?.errorDesc
 
-    if (error.response && clientPublicKey) {
-      return res.status(error.response.status).json(encryptHybrid(JSON.stringify(error.response.data), clientPublicKey));
-    } else if (clientPublicKey) {
-      return res.status(500).json(encryptHybrid(JSON.stringify(fallbackError), clientPublicKey));
-    } else {
-      return res.status(500).json(fallbackError);
-    }
+  if (error.response && clientPublicKey) {
+    return sendEncryptedError(res, clientPublicKey, errMsg, error.response.status);
   }
+
+  if (clientPublicKey) {
+    return sendEncryptedError(res, clientPublicKey, "Internal Server Error", 500);
+  }
+
+  return res.status(500).json({ message: 'Internal Server Error' });
+}
 };
 
 // const resendOTP = async (req, res) => {
@@ -627,15 +634,15 @@ const resendOTP = async (req, res) => {
     decryptedData = JSON.parse(decryptedString);
   } catch (err) {
     console.error("❌ Decryption failed in resendOTP:", err);
-    return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid encrypted payload" }), clientPublicKey));
+    return sendEncryptedError(res, clientPublicKey, "Invalid encrypted payload");
   }
 
   const { code, merchantMSISDN, token, transactionID } = decryptedData;
 
   // ✅ 2. التحقق من البيانات
-  if (!transactionID) return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Missing transaction ID" }), clientPublicKey));
-  if (!isValidNumber(code)) return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid Code" }), clientPublicKey));
-  if (!validateMerchantPhoneNumber(merchantMSISDN)) return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid Merchant Phone Number" }), clientPublicKey));
+  if (!transactionID) return sendEncryptedError(res, clientPublicKey, "Missing transaction ID");
+  if (!isValidNumber(code)) return sendEncryptedError(res, clientPublicKey, "Invalid Code");
+  if (!validateMerchantPhoneNumber(merchantMSISDN)) return sendEncryptedError(res, clientPublicKey, "Invalid Merchant Phone Number");
 
   try {
     // 📡 3. إرسال الطلب إلى Syritel
@@ -651,15 +658,22 @@ const resendOTP = async (req, res) => {
     return res.status(response.status).json(encryptedResponse);
 
   } catch (error) {
-    console.error("❌ Error in resendOTP:", error.message);
+  // console.error("Error in getToken:", error);
 
-    if (error.response && clientPublicKey) {
-      const encryptedError = encryptHybrid(JSON.stringify(error.response.data), clientPublicKey);
-      return res.status(error.response.status).json(encryptedError);
-    }
+  const errMsg =
+    error.response?.data?.message ||
+    error.response?.data?.errorDesc
 
-    return res.status(500).json({ message: "Internal Server Error" });
+  if (error.response && clientPublicKey) {
+    return sendEncryptedError(res, clientPublicKey, errMsg, error.response.status);
   }
+
+  if (clientPublicKey) {
+    return sendEncryptedError(res, clientPublicKey, "Internal Server Error", 500);
+  }
+
+  return res.status(500).json({ message: 'Internal Server Error' });
+}
 };
 
 // const getRedirctUrl = async (req, res) => {
@@ -709,16 +723,16 @@ const getRedirctUrl = async (req, res) => {
 
   // ✅ 2. التحقق من البيانات
   if (!code || !companyName || !programmName) {
-    return res.status(400).json(encryptHybrid(JSON.stringify({ message: "All fields are required." }), clientPublicKey));
+     return sendEncryptedError(res, clientPublicKey, "All fields are required.");
   }
   if (!isValidString(companyName)) {
-    return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid CompanyName" }), clientPublicKey));
+    return sendEncryptedError(res, clientPublicKey, "Invalid CompanyName");
   }
   if (!isValidString(programmName)) {
-    return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid ProgrammName" }), clientPublicKey));
+    return sendEncryptedError(res, clientPublicKey, "Invalid ProgrammName");
   }
   if (!isValidNumber(code)) {
-    return res.status(400).json(encryptHybrid(JSON.stringify({ message: "Invalid Code" }), clientPublicKey));
+    return sendEncryptedError(res, clientPublicKey, "Invalid Code");
   }
 
   try {
@@ -734,15 +748,22 @@ const getRedirctUrl = async (req, res) => {
     return res.status(response.status).json(encryptedResponse);
 
   } catch (error) {
-    console.error("❌ Error in getRedirctUrl:", error.message);
+  // console.error("Error in getToken:", error);
 
-    if (error.response && clientPublicKey) {
-      const encryptedError = encryptHybrid(JSON.stringify(error.response.data), clientPublicKey);
-      return res.status(error.response.status).json(encryptedError);
-    }
+  const errMsg =
+    error.response?.data?.message ||
+    error.response?.data?.errorDesc
 
-    return res.status(500).json({ message: "Internal Server Error" });
+  if (error.response && clientPublicKey) {
+    return sendEncryptedError(res, clientPublicKey, errMsg, error.response.status);
   }
+
+  if (clientPublicKey) {
+    return sendEncryptedError(res, clientPublicKey, "Internal Server Error", 500);
+  }
+
+  return res.status(500).json({ message: 'Internal Server Error' });
+}
 };
 
 // const getUrl = (req, res) => {
@@ -929,14 +950,15 @@ const getRedirctUrl = async (req, res) => {
 
 
 const getUrl = (req, res) => {
+  const clientPublicKey = req.session?.clientPublicKey;
   const { companyName, programmName, code, merchantMSISDN, amount } = req.body;
   const isDevRequest = req.headers["x-dev-request"] === "true";
 
-  if (!isValidString(companyName)) return isDevRequest ? res.status(400).json({ message: "Invalid CompanyName" }) : res.status(204).end();
-  if (!isValidString(programmName)) return isDevRequest ? res.status(400).json({ message: "Invalid ProgrammName" }) : res.status(204).end();
-  if (!isValidNumber(code)) return isDevRequest ? res.status(400).json({ message: "Invalid Code" }) : res.status(204).end();
-  if (!validateMerchantPhoneNumber(merchantMSISDN)) return isDevRequest ? res.status(400).json({ message: "Invalid Merchant Phone Number" }) : res.status(204).end();
-  if (!isValidAmount(amount)) return isDevRequest ? res.status(400).json({ message: "Invalid Amount" }) : res.status(204).end();
+  if (!isValidString(companyName)) return isDevRequest ? sendEncryptedError(res, clientPublicKey, "Invalid CompanyName") : res.status(204).end();
+  if (!isValidString(programmName)) return isDevRequest ? sendEncryptedError(res, clientPublicKey, "Invalid ProgrammName") : res.status(204).end();
+  if (!isValidNumber(code)) return isDevRequest ? sendEncryptedError(res, clientPublicKey, "Invalid Code") : res.status(204).end();
+  if (!validateMerchantPhoneNumber(merchantMSISDN)) return isDevRequest ? sendEncryptedError(res, clientPublicKey, "Invalid Merchant Phone Number") : res.status(204).end();
+  if (!isValidAmount(amount)) return isDevRequest ? sendEncryptedError(res, clientPublicKey, "Invalid Amount") : res.status(204).end();
 
   const transactionID = uuidv4();
   const publicID_phonePage = uuidv4();
@@ -1146,64 +1168,120 @@ const otpVerificationPage = (req, res) => {
 //   return res.status(200).json(encryptedResponse);
 // };
 
+// const getPaymentData = (req, res) => {
+//   const serverPrivateKey = req.session?.serverPrivateKey;
+//   const clientPublicKey = req.session?.clientPublicKey;
+
+//   if (!serverPrivateKey || !clientPublicKey) {
+//     const encrypted = encryptHybrid(
+//       JSON.stringify({ message: "Missing encryption keys in session" }),
+//       clientPublicKey
+//     );
+//     return res.status(401).json(encrypted);
+//   }
+
+// const { encryptedAESKey, iv, ciphertext, authTag } = req.body;
+
+
+//   if (!encryptedAESKey || !iv || !ciphertext || !authTag) {
+//     const encrypted = encryptHybrid(
+//       JSON.stringify({ message: "Missing encrypted fields" }),
+//       clientPublicKey
+//     );
+//     return res.status(400).json(encrypted);
+//   }
+
+//   let decryptedRequest;
+//   try {
+//     decryptedRequest = JSON.parse(
+//       decryptHybrid(
+//         { encryptedAESKey, iv, ciphertext, authTag },
+//         serverPrivateKey
+//       )
+//     );
+//   } catch (err) {
+//     console.error("Decryption error:", err);
+//     const encrypted = encryptHybrid(
+//       JSON.stringify({ message: "Invalid encrypted payload" }),
+//       clientPublicKey
+//     );
+//     return res.status(400).json(encrypted);
+//   }
+
+//   const publicID = decryptedRequest?.pageID;
+//   if (!publicID) {
+//     const encrypted = encryptHybrid(
+//       JSON.stringify({ message: "Missing page ID" }),
+//       clientPublicKey
+//     );
+//     return res.status(400).json(encrypted);
+//   }
+
+//   const transactionID = req.session.publicTransactionMap?.[publicID];
+//   const data = req.session.transactions?.[transactionID];
+
+//   if (!transactionID || !data) {
+//     const encrypted = encryptHybrid(
+//       JSON.stringify({ message: "Transaction not found" }),
+//       clientPublicKey
+//     );
+//     return res.status(404).json(encrypted);
+//   }
+
+//   const otpPageID = Object.keys(req.session.publicTransactionMap).find(
+//     (key) => req.session.publicTransactionMap[key] === transactionID && key !== publicID
+//   );
+
+//   const payload = {
+//     companyName: data.companyName,
+//     programmName: data.programmName,
+//     merchantMSISDN: data.merchantMSISDN,
+//     amount: data.amount,
+//     code: data.code,
+//     transactionID: data.transactionID,
+//     otp : data.otp,
+//     otpPageID
+//   };
+
+//   const encryptedResponse = encryptHybrid(JSON.stringify(payload), clientPublicKey);
+//   return res.status(200).json(encryptedResponse);
+// };
+
+
 const getPaymentData = (req, res) => {
   const serverPrivateKey = req.session?.serverPrivateKey;
   const clientPublicKey = req.session?.clientPublicKey;
 
   if (!serverPrivateKey || !clientPublicKey) {
-    const encrypted = encryptHybrid(
-      JSON.stringify({ message: "Missing encryption keys in session" }),
-      clientPublicKey
-    );
-    return res.status(401).json(encrypted);
+    return sendEncryptedError(res, clientPublicKey, "Missing encryption keys in session", 401);
   }
 
-const { encryptedAESKey, iv, ciphertext, authTag } = req.body;
-
+  const { encryptedAESKey, iv, ciphertext, authTag } = req.body;
 
   if (!encryptedAESKey || !iv || !ciphertext || !authTag) {
-    const encrypted = encryptHybrid(
-      JSON.stringify({ message: "Missing encrypted fields" }),
-      clientPublicKey
-    );
-    return res.status(400).json(encrypted);
+    return sendEncryptedError(res, clientPublicKey, "Missing encrypted fields", 400);
   }
 
   let decryptedRequest;
   try {
     decryptedRequest = JSON.parse(
-      decryptHybrid(
-        { encryptedAESKey, iv, ciphertext, authTag },
-        serverPrivateKey
-      )
+      decryptHybrid({ encryptedAESKey, iv, ciphertext, authTag }, serverPrivateKey)
     );
   } catch (err) {
     console.error("Decryption error:", err);
-    const encrypted = encryptHybrid(
-      JSON.stringify({ message: "Invalid encrypted payload" }),
-      clientPublicKey
-    );
-    return res.status(400).json(encrypted);
+    return sendEncryptedError(res, clientPublicKey, "Invalid encrypted payload", 400);
   }
 
   const publicID = decryptedRequest?.pageID;
   if (!publicID) {
-    const encrypted = encryptHybrid(
-      JSON.stringify({ message: "Missing page ID" }),
-      clientPublicKey
-    );
-    return res.status(400).json(encrypted);
+    return sendEncryptedError(res, clientPublicKey, "Missing page ID", 400);
   }
 
   const transactionID = req.session.publicTransactionMap?.[publicID];
   const data = req.session.transactions?.[transactionID];
 
   if (!transactionID || !data) {
-    const encrypted = encryptHybrid(
-      JSON.stringify({ message: "Transaction not found" }),
-      clientPublicKey
-    );
-    return res.status(404).json(encrypted);
+    return sendEncryptedError(res, clientPublicKey, "Transaction not found", 404);
   }
 
   const otpPageID = Object.keys(req.session.publicTransactionMap).find(
@@ -1217,14 +1295,13 @@ const { encryptedAESKey, iv, ciphertext, authTag } = req.body;
     amount: data.amount,
     code: data.code,
     transactionID: data.transactionID,
-    otp : data.otp,
+    otp: data.otp,
     otpPageID
   };
 
   const encryptedResponse = encryptHybrid(JSON.stringify(payload), clientPublicKey);
   return res.status(200).json(encryptedResponse);
 };
-
 
 const exchangeKeys = (req, res) => {
   const { clientPublicKey } = req.body;
@@ -1234,18 +1311,19 @@ const exchangeKeys = (req, res) => {
   }
 
   try {
+    const { publicKey, privateKey } = generateRSAKeyPair();
     // ✅ توليد مفتاح RSA للسيرفر
-    const { publicKey, privateKey } = generateKeyPairSync('rsa', {
-      modulusLength: 2048,
-      publicKeyEncoding: {
-        type: 'spki',
-        format: 'pem'
-      },
-      privateKeyEncoding: {
-        type: 'pkcs8',
-        format: 'pem'
-      }
-    });
+    // const { publicKey, privateKey } = generateKeyPairSync('rsa', {
+    //   modulusLength: 2048,
+    //   publicKeyEncoding: {
+    //     type: 'spki',
+    //     format: 'pem'
+    //   },
+    //   privateKeyEncoding: {
+    //     type: 'pkcs8',
+    //     format: 'pem'
+    //   }
+    // });
 
     // 🔐 تخزين المفاتيح في الجلسة
     req.session.clientPublicKey = clientPublicKey;

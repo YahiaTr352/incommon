@@ -487,13 +487,18 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     serverPublicKey = await importServerPublicKey(resKey.data.serverPublicKey);
 
+    } catch (error){
+      console.log(error);
+    }
+
 
         const pathParts = window.location.pathname.split("/");
     const publicID = pathParts[pathParts.length - 1];
 const payload = { pageID: publicID };
 const encryptedPayload = await encryptHybrid(JSON.stringify(payload), serverPublicKey);
 
-// 2. إرسال الطلب المشفر بـ POST
+
+try{
 const res = await axios.post(`${baseURL}/api/clients/payment-data`, encryptedPayload, {
   withCredentials: true
 });
@@ -520,13 +525,17 @@ fixedData = {
 };
 otpPageID = DOMPurify.sanitize(rawData.otpPageID);
 
-
-  } catch (error) {
-    showToast("Failed to load payment data.");
-    console.log(error);
-    return;
-  }
-
+} catch (error) {
+    if (error.response?.data?.encryptedAESKey) {
+      // إذا الخطأ مشفّر
+      const decryptedError = await decryptHybrid(error.response.data, rsaKeyPair.privateKey);
+      const errMsg = decryptedError.message || decryptedError.errorDesc || "Unknown encrypted error";
+      console.log(DOMPurify.sanitize(errMsg), "error");
+    }
+     else {
+      console.log(DOMPurify.sanitize(error));
+    }
+}
   // ✅ عرض OTP في toast للتجريب
   console.log(`OTP is: ${fixedData.otp}`);
   showToast(`Your verification code is: ${fixedData.otp}`, "success", 10000);
@@ -624,7 +633,11 @@ if (decryptedConfirmRes.errorCode === 0) {
         code: fixedData.code
     };
 
+
+    try{
     const encryptedRedirectUrlPayload = await encryptHybrid(JSON.stringify(redirectUrlPayload), serverPublicKey);
+
+    
 
     const urlResponse = await axios.post(`${baseURL}/api/clients/getRedirct-url`, encryptedRedirectUrlPayload, {
       withCredentials: true
@@ -638,21 +651,44 @@ if (decryptedConfirmRes.errorCode === 0) {
   } else {
     showToast("URL not found for this transaction.");
   }
-
-} else {
-  showToast("Verification failed. Please try again.");
+  }catch (error) {
+    if (error.response?.data?.encryptedAESKey) {
+      // إذا الخطأ مشفّر
+      const decryptedError = await decryptHybrid(error.response.data, rsaKeyPair.privateKey);
+      const errMsg = decryptedError.message || decryptedError.errorDesc || "Unknown encrypted error";
+      console.log(DOMPurify.sanitize(errMsg), "error");
+    }
+    else {
+      console.log("Unexpected error occurred", "error");
+    }
 }
+
+} 
 
 } catch (error) {
-  console.log(error);
 
-  if (error.response && error.response.data?.errorDesc) {
-    showToast(DOMPurify.sanitize(error.response.data.errorDesc));
-  } else {
-    showToast("Something went wrong, try again later.");
-  }
+    if (error.response?.data?.encryptedAESKey) {
+      // إذا الخطأ مشفّر
+      const decryptedError = await decryptHybrid(error.response.data, rsaKeyPair.privateKey);
+      const errMsg = decryptedError.message || decryptedError.errorDesc || "Unknown encrypted error";
+      console.log(DOMPurify.sanitize(errMsg), "error");
+
+ if(error.response.status === 404 || 405 || 406 || 407 || 408 || 410 ){
+        const errorMessage = DOMPurify.sanitize(errMsg);
+        showToast(errorMessage);
+        return;
+    }
+
+    else {
+      showToast("something went wrong, try again later.");
+    }
+
+
+    } else {
+      console.log(DOMPurify.sanitize(error));
+      showToast("something went wrong, try again later.");
+    }
 }
-
   });
 
   // ✅ إعادة إرسال OTP
@@ -693,20 +729,32 @@ if (decryptedConfirmRes.errorCode === 0) {
       if (decryptedResendOtp.errorCode === 0) {
         const newOtp = DOMPurify.sanitize(decryptedResendOtp.otp);
         showToast(`Your new verification code is: ${newOtp}`, "success", 10000);
+      } 
+    }catch (error) {
+    if (error.response?.data?.encryptedAESKey) {
+      // إذا الخطأ مشفّر
+      const decryptedError = await decryptHybrid(error.response.data, rsaKeyPair.privateKey);
+      const errMsg = decryptedError.message || decryptedError.errorDesc || "Unknown encrypted error";
+      console.log(DOMPurify.sanitize(errMsg), "error");
+
+      if (error.response && [405 , 410].includes(error.response.status)) {
+        clearInterval(timerInterval);
+        resendBtn.classList.remove("disabled");
+        resendBtn.textContent = "Resend OTP";
+        const errorMessage = DOMPurify.sanitize(errMsg);
+        showToast(errorMessage);
+        return;
+
       } else {
-        showToast("Failed to resend OTP.");
-      }
-    } catch (error) {
-      console.log(error);
       clearInterval(timerInterval);
       resendBtn.classList.remove("disabled");
       resendBtn.textContent = "Resend OTP";
-
-      if (error.response?.data?.errorDesc) {
-        showToast(DOMPurify.sanitize(error.response.data.errorDesc));
-      } else {
-        showToast("Something went wrong while resending OTP.");
+      showToast("Something went wrong, try again later.");
       }
+    } else {
+      console.log(DOMPurify.sanitize(error));
+      showToast("something went wrong, try again later.");
     }
+}
   });
 });

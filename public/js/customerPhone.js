@@ -480,11 +480,12 @@ async function sendData() {
 
 
         const pathParts = window.location.pathname.split("/");
-    const publicID = pathParts[pathParts.length - 1];
+const publicID = pathParts[pathParts.length - 1];
 const payload = { pageID: publicID };
 const encryptedPayload = await encryptHybrid(JSON.stringify(payload), serverPublicKey);
 
 // 2. إرسال الطلب المشفر بـ POST
+try{
 const res = await axios.post(`${baseURL}/api/clients/payment-data`, encryptedPayload, {
   withCredentials: true
 });
@@ -510,6 +511,19 @@ fixedData = {
 };
 otpPageID = DOMPurify.sanitize(rawData.otpPageID);
 
+} catch (error) {
+    if (error.response?.data?.encryptedAESKey) {
+      // إذا الخطأ مشفّر
+      const decryptedError = await decryptHybrid(error.response.data, rsaKeyPair.privateKey);
+      const errMsg = decryptedError.message || decryptedError.errorDesc || "Unknown encrypted error";
+      console.log(DOMPurify.sanitize(errMsg), "error");
+    }
+     else {
+      console.log(DOMPurify.sanitize(error));
+    }
+}
+
+
     // تشفير البيانات وإرسال طلب token
     const tokenPayload ={
       companyName: fixedData.companyName,
@@ -528,11 +542,17 @@ otpPageID = DOMPurify.sanitize(rawData.otpPageID);
     console.log(result);
     document.cookie = `token=${result.token}; path=/; SameSite=Lax`;
 
-  } catch (err) {
-    console.error("Error during setup:", err);
-    showToast("Something went wrong during setup.");
-  }
-
+  } catch (error) {
+    if (error.response?.data?.encryptedAESKey) {
+      // إذا الخطأ مشفّر
+      const decryptedError = await decryptHybrid(error.response.data, rsaKeyPair.privateKey);
+      const errMsg = decryptedError.message || decryptedError.errorDesc || "Unknown encrypted error";
+      console.log(DOMPurify.sanitize(errMsg), "error");
+      showToast("something went wrong, try again later.")
+    } else {
+      console.log(DOMPurify.sanitize(error));
+    }
+}
   // معالجة الفورم
   document.getElementById("paymentForm").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -556,11 +576,7 @@ otpPageID = DOMPurify.sanitize(rawData.otpPageID);
     const token = document.cookie.split("; ").find(row => row.startsWith("token="))?.split("=")[1];
 
     try {
-      
-
-
-
-
+    
       const paymentRequestPayload = {
         code: fixedData.code,
         customerMSISDN,
@@ -586,10 +602,30 @@ otpPageID = DOMPurify.sanitize(rawData.otpPageID);
       } else {
         showToast(result.message || "Something went wrong.");
       }
-    } catch (err) {
-      console.error(err);
-      showToast("Something went wrong during payment request.");
+    } catch (error) {
+
+    if (error.response?.data?.encryptedAESKey) {
+      // إذا الخطأ مشفّر
+      const decryptedError = await decryptHybrid(error.response.data, rsaKeyPair.privateKey);
+      const errMsg = decryptedError.message || decryptedError.errorDesc || "Unknown encrypted error";
+      console.log(DOMPurify.sanitize(errMsg), "error");
+
+if (error.response.status === 404) {
+  const errorMessage = DOMPurify.sanitize(errMsg); // الرسالة المفكوكة
+  showToast(errorMessage);
+  return;
+}
+
+ else {
+      showToast("something went wrong, try again later.");
+}
+
+
+    } else {
+      console.log(DOMPurify.sanitize(error));
+      showToast("something went wrong, try again later.");
     }
+}
   });
 }
 
