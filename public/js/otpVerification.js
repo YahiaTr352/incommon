@@ -447,7 +447,7 @@
 // });
 
 window.addEventListener("DOMContentLoaded", async () => {
-  const baseURL = "http://localhost:3001";
+  const baseURL = "https://paymentgateway-0bks.onrender.com";
   let fixedData;
 
   try {
