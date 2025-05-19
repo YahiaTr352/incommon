@@ -19,7 +19,7 @@ const uri = "mongodb+srv://user1:Eainvu1EXlLCncUC@cluster0.ahrtlxh.mongodb.net/"
 const ConnectDB = async() => {
 
     try{
-    mongoose.connect(uri, {
+    await mongoose.connect(uri, {
         ssl: true, // تأكد من أن الاتصال باستخدام SSL
     })
 
