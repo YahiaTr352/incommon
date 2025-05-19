@@ -1,13 +1,36 @@
+// const mongoose = require("mongoose");
+
+// const ConnectDB = async () => {
+//   try {
+//     await mongoose.connect("mongodb://localhost:/PaymentGateWayTwo");
+//     console.log("✅ Connected to MongoDB");
+
+//   } catch (error) {
+//     console.error("❌ Failed to connect to MongoDB:", error);
+//   }
+// };
+
+// module.exports = ConnectDB;
+
+
+
 const mongoose = require("mongoose");
+const uri = "mongodb+srv://user1:Eainvu1EXlLCncUC@cluster0.ahrtlxh.mongodb.net/";
+const ConnectDB = async() => {
 
-const ConnectDB = async () => {
-  try {
-    await mongoose.connect("mongodb://localhost:/PaymentGateWayTwo");
-    console.log("✅ Connected to MongoDB");
+    try{
+    mongoose.connect(uri, {
+        ssl: true, // تأكد من أن الاتصال باستخدام SSL
+    })
 
-  } catch (error) {
-    console.error("❌ Failed to connect to MongoDB:", error);
-  }
-};
+    console.log("connected to mongodb");
+
+    }catch(error){
+        console.log("failed to connect to mongoDB");
+        console.log("..............................................");
+        console.log(error);
+    }
+}
+
 
 module.exports = ConnectDB;

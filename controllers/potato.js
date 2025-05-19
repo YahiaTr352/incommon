@@ -267,7 +267,7 @@ const {
   sendEncryptedError
 } = require('../utils/encryption');
 
-BASE_API_URL = "http://localhost:5000"
+BASE_API_URL = "https://opposite-1.onrender.com"
 // ======== API Handlers ========
 
 // const getToken = async (req, res) => {

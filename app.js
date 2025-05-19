@@ -7,7 +7,9 @@ const path = require("path");
 const session = require("express-session");
 const userAgentFilter = require("./middlewares/userAgentFilter");
 const limiter = require("./middlewares/limiter");
+const MongoStore = require('connect-mongo');
 const cookieParser = require("cookie-parser");
+const ConnectDB = require("./config/config");
 require("dotenv").config(); // تحميل متغيرات البيئة من .env
 
 const app = express();
@@ -23,22 +25,39 @@ app.use(cors({
 }));
 
 app.use(express.json());
+ConnectDB();
 app.use(express.static(path.join(__dirname, "public")));
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
 // إعدادات الجلسة
-const sessionSecret = process.env.SESSION_SECRET || "default_session_secret";
-app.use(session({
-  secret: sessionSecret,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: false,
-    httpOnly: true,
-    sameSite: "lax"
-  }
-}));
+// const sessionSecret = process.env.SESSION_SECRET || "default_session_secret";
+// app.use(session({
+//   secret: sessionSecret,
+//   resave: false,
+//   saveUninitialized: false,
+//   cookie: {
+//     secure: false,
+//     httpOnly: true,
+//     sameSite: "lax"
+//   }
+// }));
+
+    app.use(session({
+      secret: "Secret",
+      resave: false,
+      saveUninitialized: false,
+      store: MongoStore.create({
+        mongoUrl: "mongodb://localhost:/PaymentGateWay",
+        collectionName: 'sessions',    
+        ttl: 60 * 60 * 24              
+      }),
+      cookie: {
+        secure: false,
+        httpOnly: true,
+        sameSite: "lax"
+      }
+    }));
 
 // الراوتس
 app.use("/api/clients", potatoRoutes);
