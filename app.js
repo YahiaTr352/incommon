@@ -19,10 +19,26 @@ const port = process.env.PORT || 3001;
 app.disable("x-powered-by");
 app.use(userAgentFilter);
 app.use(cookieParser());
-app.use(cors({
-  origin: "http://localhost:3000",
-  credentials: true
-}));
+ const allowedOrigins = [
+      'http://localhost:3000',
+      'https://projecto-cz1yz8i3g-yahiatrs-projects.vercel.app' // عدّلها حسب اسم موقعك ع Render
+    ];
+
+    app.use(cors({
+      origin: function(origin, callback) {
+        // السماح بالطلبات بدون origin (مثل Postman أو نفس السيرفر)
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      },
+      credentials: true
+    }));
+// app.use(cors({
+//   origin: "http://localhost:3000",
+//   credentials: true
+// }));
 
 app.use(express.json());
 ConnectDB();
