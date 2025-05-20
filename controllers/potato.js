@@ -983,7 +983,7 @@ const getUrl = (req, res) => {
   req.session.publicTransactionMap[publicID_phonePage] = transactionID;
   req.session.publicTransactionMap[publicID_otpPage] = transactionID;
 
-  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  const baseUrl = `https://paymentgateway-0bks.onrender.com`;
   const redirectUrl = `${baseUrl}/api/clients/customerPhone-page/${publicID_phonePage}`;
 
   return res.json({ url: redirectUrl });
