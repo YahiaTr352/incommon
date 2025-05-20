@@ -21,7 +21,7 @@ app.use(userAgentFilter);
 app.use(cookieParser());
  const allowedOrigins = [
       'http://localhost:3000',
-      'https://projecto-cz1yz8i3g-yahiatrs-projects.vercel.app' // عدّلها حسب اسم موقعك ع Render
+      'https://projecto-ht6g72ryx-yahiatrs-projects.vercel.app' // عدّلها حسب اسم موقعك ع Render
     ];
 
     app.use(cors({
