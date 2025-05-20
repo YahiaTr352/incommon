@@ -69,7 +69,7 @@ app.set("views", path.join(__dirname, "views"));
         ttl: 60 * 60 * 24              
       }),
       cookie: {
-        secure: false,
+        secure: true,
         httpOnly: true,
         sameSite: "none"
       }
