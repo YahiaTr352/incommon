@@ -48,7 +48,7 @@ app.set("views", path.join(__dirname, "views"));
       resave: false,
       saveUninitialized: false,
       store: MongoStore.create({
-        mongoUrl: "mongodb://localhost:/PaymentGateWay",
+        mongoUrl: "mongodb+srv://user1:Eainvu1EXlLCncUC@cluster0.ahrtlxh.mongodb.net/",
         collectionName: 'sessions',    
         ttl: 60 * 60 * 24              
       }),
