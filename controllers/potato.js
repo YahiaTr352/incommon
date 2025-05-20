@@ -1060,6 +1060,8 @@ const getUrl = (req, res) => {
 
 // عرض صفحة إدخال رقم الهاتف
 const customerPhonePage = (req, res) => {
+  console.log("✅ Session test", req.session);
+
   const { publicID } = req.params; 
   const transactionID = req.session.publicTransactionMap?.[publicID];
   const data = req.session.transactions?.[transactionID];
