@@ -983,6 +983,8 @@ const getUrl = (req, res) => {
   req.session.publicTransactionMap[publicID_phonePage] = transactionID;
   req.session.publicTransactionMap[publicID_otpPage] = transactionID;
 
+    console.log("✅ getUrl Session test", req.session);
+
   const baseUrl = `https://paymentgateway-0bks.onrender.com`;
   const redirectUrl = `${baseUrl}/api/clients/customerPhone-page/${publicID_phonePage}`;
 
@@ -1060,7 +1062,7 @@ const getUrl = (req, res) => {
 
 // عرض صفحة إدخال رقم الهاتف
 const customerPhonePage = (req, res) => {
-  console.log("✅ Session test", req.session);
+  console.log("✅ customerPhonePage Session test", req.session);
 
   const { publicID } = req.params; 
   const transactionID = req.session.publicTransactionMap?.[publicID];
