@@ -62,7 +62,7 @@ app.set("views", path.join(__dirname, "views"));
     app.use(session({
       secret: "Secret",
       resave: false,
-      saveUninitialized: false,
+      saveUninitialized: true,
       store: MongoStore.create({
         mongoUrl: "mongodb+srv://user1:Eainvu1EXlLCncUC@cluster0.ahrtlxh.mongodb.net/",
         collectionName: 'sessions',    
@@ -71,7 +71,10 @@ app.set("views", path.join(__dirname, "views"));
       cookie: {
         secure: true,
         httpOnly: true,
-        sameSite: "none"
+        // sameSite: "none"
+          httpOnly: true,
+          sameSite: "none",
+          maxAge: 1000 * 60 * 60 * 24  // صلاحية الجلسة 24 ساعة
       }
     }));
 
