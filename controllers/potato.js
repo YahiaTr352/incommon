@@ -1064,11 +1064,11 @@ const getUrl = (req, res) => {
 const customerPhonePage = (req, res) => {
   console.log("✅ customerPhonePage Session test", req.session);
 
-  const { publicID } = req.params; 
-  const transactionID = req.session.publicTransactionMap?.[publicID];
-  const data = req.session.transactions?.[transactionID];
+  // const { publicID } = req.params; 
+  // const transactionID = req.session.publicTransactionMap?.[publicID];
+  // const data = req.session.transactions?.[transactionID];
 
-  if (!transactionID || !data) return res.status(404).send("Transaction not found");
+  // if (!transactionID || !data) return res.status(404).send("Transaction not found");
 
   // req.session.currentTransactionID = transactionID;
   res.render("pages/customerPhone/customerPhone");
